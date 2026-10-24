@@ -1,0 +1,173 @@
+# 番外话 · 社团新番评价收集
+
+轻量的新番评价网页：静态 HTML、CSS、JavaScript 直接连接 Supabase，无需自建后端，没有 npm 依赖，也没有编译步骤。项目带有 Nginx 本地托管配置。
+
+## Nginx 与临时公网访问
+
+本项目已经是静态网页，不需要构建、`dist` 或文件复制。先安装 Node.js（22 或以上）、Nginx 和 `cloudflared`，确保 `nginx`、`cloudflared` 命令可用。在项目目录运行：
+
+```sh
+npm run web
+```
+
+启动命令先读取项目内的 `nginx/nginx.conf` 并启动 Nginx，确认本次启动的进程和网页就绪后，再自动运行 `cloudflared tunnel --url http://127.0.0.1:80`。终端会显示 Cloudflare 分配的 `https://随机名称.trycloudflare.com` 地址，将它发给别人即可访问。只需保持这一个终端运行，按 `Ctrl+C` 会一并停止两个进程。
+
+默认 Nginx 监听所有 IPv4 网卡的 **80 端口**，本机打开 <http://127.0.0.1/>。局域网内也可使用 `http://这台电脑的IP/`。修改 `nginx/nginx.conf` 中的 `listen 80;` 后，脚本会自动使用新的端口创建隧道。
+
+配置中的 `root .;` 根据启动脚本传入的项目路径解析，移动项目后也无需修改绝对路径。修改网页后直接刷新，修改 Nginx 配置后重启命令。`.runtime/nginx/` 仅保存日志和进程文件。
+
+通过 Cloudflare 隧道访问不需要本机有公网 IP，也不需要路由器端口转发；电脑需要能连接 Cloudflare。本机服务使用 HTTP，生成的公网链接使用 HTTPS。临时链接停止后失效，重新启动会更换地址，适合临时分享，没有可用性保证。参见 [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)。
+
+如果启动时提示 80 端口权限不足，需要以有权监听该端口的用户运行 Nginx；提示端口被占用时，需要停止占用该端口的服务，或修改 `nginx/nginx.conf` 中的 `listen 80;`。
+
+当前 `config.js` 已配置 Supabase，日常启动无需重复初始化。浏览器身份按访问地址保存；更换域名或端口后不会自动恢复原地址中的匿名身份，因此临时链接变化后也需要重新填写资料，正式收集评价宜固定域名。
+
+### 启动脚本的含义
+
+`npm run web` 执行 `node scripts/web.mjs`，流程如下：
+
+1. 根据脚本自身位置找到项目目录，不依赖终端当前路径。
+2. 创建 `.runtime/nginx/`，供 Nginx 保存 PID 和错误日志；目录已存在时直接使用。
+3. 从 `listen 端口;` 读取端口，通过 `spawn` 前台启动 Nginx；最多等待 10 秒确认 PID 属于本次启动的进程且首页返回成功响应。
+4. 网页就绪后，通过 `spawn` 启动 Cloudflare 隧道，将两个进程的输出显示在同一终端。
+5. 按 `Ctrl+C`、收到终止信号、启动失败或任一进程意外退出时，停止其余进程；若 3 秒后仍未退出则强制结束。失败返回非零状态，正常手动停止返回成功状态。
+
+| 启动参数 | 含义 |
+| --- | --- |
+| `-e stderr` | 将读取配置前的启动错误输出到终端；加载配置后按 `error_log` 写入日志。 |
+| `-p 项目目录` | 将项目目录设为路径前缀，配置中的相对路径以此为基准。 |
+| `-c nginx/nginx.conf` | 使用本项目的配置文件。 |
+| `-g 'daemon off;'` | 前台运行 Nginx，由 Node 脚本管理其退出。 |
+| `cloudflared tunnel --url 本机地址` | 将本机 Nginx 服务连接到 Cloudflare，输出临时 HTTPS 公网链接。 |
+
+脚本不查询公网 IP、不枚举网卡，也不复制网页文件。端口统一在 `nginx/nginx.conf` 的 `listen 端口;` 修改。若未安装 Nginx 或 `cloudflared`，启动失败会给出错误并清理本次启动的进程。
+
+### Nginx 配置的含义
+
+| 配置 | 含义 |
+| --- | --- |
+| `pid` | 保存 Nginx 主进程编号。 |
+| `error_log ... warn` | 将警告及更严重的错误写入 `.runtime/nginx/error.log`。 |
+| `events` / `worker_connections 128` | 设置每个工作进程可同时处理的连接数上限；默认使用一个工作进程。 |
+| `http` | 放置 HTTP 服务配置。 |
+| `access_log off` | 关闭逐请求访问日志。 |
+| `types` / `default_type` | 告诉浏览器哪些文件是 HTML、CSS、JavaScript、JSON 或 SVG；其他类型按二进制文件返回。 |
+| `server` / `listen 80` | 建立网站服务，监听所有 IPv4 网卡的 80 端口。 |
+| `root .` / `index index.html` | 直接提供项目目录中的文件，首页为 `index.html`。 |
+| 两条带 `~` 的 `location` | 用正则匹配并屏蔽隐藏路径及脚本、配置和 SQL 目录，返回 404。 |
+| `location /` / `try_files` | 查找请求对应的文件或目录；不存在时返回 404。 |
+
+配置含义可参考 [Nginx 命令行参数](https://nginx.org/en/docs/switches.html)、[核心配置](https://nginx.org/en/docs/ngx_core_module.html)和 [HTTP 配置](https://nginx.org/en/docs/http/ngx_http_core_module.html)。
+
+## 本地数据库管理
+
+数据库管理只通过命令行执行。网页不包含 Access Token 输入框、初始化页面或执行 SQL 的接口。`npm run web` 只启动网站和公网隧道，不读取管理 Token，也不会自动修改数据库。
+
+### 配置 Access Token
+
+在项目目录准备本地配置文件（已有文件时不会覆盖）：
+
+```sh
+cp -n .env.example .env.local
+chmod 600 .env.local
+```
+
+编辑 `.env.local`，填写：
+
+```dotenv
+SUPABASE_ACCESS_TOKEN=sbp_你的管理Token
+```
+
+Token 可在 [Supabase Access Tokens](https://supabase.com/dashboard/account/tokens) 创建。它是账号的 Personal Access Token，不是 Publishable key 或数据库密码。
+
+项目地址与公开密钥默认沿用 `config.js`；更换项目时可填写 `.env.local` 中的 `SUPABASE_URL` 和 `SUPABASE_PUBLISHABLE_KEY`。`SUPABASE_ADMIN_USER_ID` 用于可选的管理员授权。也可以通过同名环境变量提供这些值。
+
+`.env.local` 已加入 `.gitignore`，Nginx 和本机预览服务均不提供该文件。它保存的管理 Token 仅供本机命令调用 Supabase 官方管理 API，不会写入网页的 `config.js`。不要把它放入公开目录或推送到仓库。
+
+### 初始化或升级
+
+```sh
+npm run db:init
+```
+
+命令会执行 `supabase/schema.sql` 和 `supabase/seed.sql`，更新数据表与权限、导入初始片单、启用匿名登录，验证后写入公开连接配置。可重复执行，保留已有身份、评价、番剧和管理员授权。
+
+完整初始化需要 Token 具备该项目的 Database、Auth Config、Project Settings 读写权限；未提供公开密钥而需要自动读取时，还需要 API Keys 读取权限。
+
+### 查询数据库
+
+```sh
+npm run db:query -- "select id, title from public.club_anime order by sort_order limit 10;"
+```
+
+`db:query` 以只读模式执行并打印 JSON 结果。
+
+### 执行 SQL 文件
+
+```sh
+npm run db:sql -- ./修改.sql
+```
+
+该命令将指定文件中的 SQL 提交到当前项目，可用于修改数据或表结构。相对文件路径以执行命令时的终端目录为准；Token 和 `config.js` 始终从项目目录读取。文件需要事务时自行包含 `begin;` 和 `commit;`。
+
+`db:query` 和 `db:sql` 只需要对应项目的 Database 权限。底层使用 [Supabase SQL query API](https://supabase.com/docs/reference/api/v1-run-a-query)，该上游接口目前标记为实验性／Beta。
+
+## 本次版本的旧库升级
+
+本次改为 QQ 号、仅允许管理员新增番剧，并移除自动截止。已有项目也需要执行数据库升级，不能只刷新前端。
+
+本地配置好 Token 后，可以直接执行：
+
+```sh
+npm run db:sql -- supabase/schema.sql
+```
+
+或者运行上面的 `npm run db:init`，同时完成片单和匿名登录配置核对。
+
+升级保留现有 CN、评价和管理员授权。旧用户首次进入新版时需要补填 QQ 号；旧手机号不会被当作 QQ 号，历史联系方式仅保留在旧库原字段中，前端不再读取或写入，新库只创建 QQ 字段。旧资料暂时可以没有 QQ，但新增或修改资料时必须填写。
+
+升级会移除旧的自动截止时间字段及相关限制，是否允许填写只由管理员的“开放填写”开关决定。
+
+## 管理员
+
+已有管理员从网页底部“管理员入口”使用邮箱和密码登录。
+
+新增管理员时，在 Supabase Authentication → Users 创建并确认邮箱用户，将其 UUID 填入 `.env.local` 的 `SUPABASE_ADMIN_USER_ID`，再执行 `npm run db:init`。授权完成后可清空这个可选配置项；清空不会撤销已授予的权限。
+
+管理员可查看全体评价、新增番剧、管理番剧公开状态、切换默认评价阶段、手动开放或关闭填写、导出 CSV（含 QQ 号）。
+
+## 使用说明
+
+- 社员填写 CN 和 QQ 号（5～20 位数字，首位非 0），无需密码；同一浏览器、同一站点会记忆身份。
+- QQ 号是联系资料，不是身份验证凭据。换设备或清除浏览器存储后，不能凭 QQ 号找回原身份。
+- 前中期与完结评价分别保存。评分 0～5，最多一位小数；可以只写吐槽，0 分和未评分分别处理。
+- 输入后自动保存，可查看保存状态；失败时可重试，草稿保留在当前浏览器。
+- 普通用户不能新增番剧；管理员在工作台新增后直接公开，数据库也限制为仅管理员可新增。
+- 支持个人导出、管理员明细和原表布局导出；导出包含 QQ 号（明细表单独一列，原表布局写在姓名后的括号里）。QQ 号用于联系和生成头像，请妥善保管，不要公开传播。
+- “本地体验”内容仅在当前浏览器，不自动迁移到云端。
+
+## 本机预览
+
+只在本机查看前端、不启动 Nginx 或公网隧道时，可以运行 `npm start`，打开 <http://127.0.0.1:4173/>；端口可用 `PORT=4175 npm start` 调整。预览服务只提供网页静态文件，没有数据库管理接口。
+
+## GitHub Pages 部署
+
+将本目录内的文件作为独立仓库根目录上传，包括 `.github`，在仓库 Settings → Pages → Source 选择 **GitHub Actions**。随附工作流只上传指定静态文件和 SDK，不需要安装或构建，也不上传 `.env.local`、管理脚本、Nginx 配置或 SQL 文件。公开的 `config.js` 需随网页上传。
+
+如果应用作为其他仓库的子目录，需要将工作流放到仓库根目录并调整复制路径。不要将整个微信公众号工作区上传，避免包含原始社员资料。
+
+## 文件结构
+
+| 文件或目录 | 用途 |
+| --- | --- |
+| `index.html`、`styles.css`、`favicon.svg` | 网页及样式 |
+| `app.js`、`core.js`、`store.js` | 交互、评分与导出、数据访问 |
+| `config.js`、`catalog.json` | 公开连接配置和初始片单 |
+| `.env.example` / `.env.local` | 本地管理配置示例 / 私有配置 |
+| `scripts/web.mjs` | Nginx 与临时公网隧道启动 |
+| `scripts/serve.mjs` | 本机静态预览 |
+| `scripts/database.mjs`、`scripts/initialize.mjs` | 命令行数据库操作及初始化实现 |
+| `nginx/nginx.conf` | 网站托管配置 |
+| `supabase/` | 表结构、权限升级和初始片单 |
+| `vendor/` | Supabase SDK、来源说明和许可 |
+| `.github/workflows/pages.yml` | GitHub Pages 部署配置 |

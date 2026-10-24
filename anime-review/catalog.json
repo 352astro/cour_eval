@@ -1,0 +1,485 @@
+[
+  {
+    "id": "anime-001",
+    "season_id": "2026-07",
+    "title": "BanG Dream! YUME∞MITA",
+    "sort_order": 1,
+    "is_approved": true
+  },
+  {
+    "id": "anime-002",
+    "season_id": "2026-07",
+    "title": "成长秀～向日葵马戏团～",
+    "sort_order": 2,
+    "is_approved": true
+  },
+  {
+    "id": "anime-003",
+    "season_id": "2026-07",
+    "title": "魔法少女奈叶 EXCEEDS Gun Blaze Vengeance",
+    "sort_order": 3,
+    "is_approved": true
+  },
+  {
+    "id": "anime-004",
+    "season_id": "2026-07",
+    "title": "再见，拉拉",
+    "sort_order": 4,
+    "is_approved": true
+  },
+  {
+    "id": "anime-005",
+    "season_id": "2026-07",
+    "title": "铠真传 武士军团 第二部分",
+    "sort_order": 5,
+    "is_approved": true
+  },
+  {
+    "id": "anime-006",
+    "season_id": "2026-07",
+    "title": "梅比乌斯之尘",
+    "sort_order": 6,
+    "is_approved": true
+  },
+  {
+    "id": "anime-007",
+    "season_id": "2026-07",
+    "title": "PLANNOSAURUS 真古生遗物部",
+    "sort_order": 7,
+    "is_approved": true
+  },
+  {
+    "id": "anime-008",
+    "season_id": "2026-07",
+    "title": "刃牙道 第2部分",
+    "sort_order": 8,
+    "is_approved": true
+  },
+  {
+    "id": "anime-009",
+    "season_id": "2026-07",
+    "title": "落第贤者的学院无双～第二回转生，S等级作弊魔术师冒险记～",
+    "sort_order": 9,
+    "is_approved": true
+  },
+  {
+    "id": "anime-010",
+    "season_id": "2026-07",
+    "title": "世界在起舞",
+    "sort_order": 10,
+    "is_approved": true
+  },
+  {
+    "id": "anime-011",
+    "season_id": "2026-07",
+    "title": "花样少年少女 第二季",
+    "sort_order": 11,
+    "is_approved": true
+  },
+  {
+    "id": "anime-012",
+    "season_id": "2026-07",
+    "title": "令和的斑小姐",
+    "sort_order": 12,
+    "is_approved": true
+  },
+  {
+    "id": "anime-013",
+    "season_id": "2026-07",
+    "title": "被追放的转生重骑士用游戏知识开无双",
+    "sort_order": 13,
+    "is_approved": true
+  },
+  {
+    "id": "anime-014",
+    "season_id": "2026-07",
+    "title": "尼古喵喵",
+    "sort_order": 14,
+    "is_approved": true
+  },
+  {
+    "id": "anime-015",
+    "season_id": "2026-07",
+    "title": "少女怪兽焦糖味",
+    "sort_order": 15,
+    "is_approved": true
+  },
+  {
+    "id": "anime-016",
+    "season_id": "2026-07",
+    "title": "描绘直至生命尽头",
+    "sort_order": 16,
+    "is_approved": true
+  },
+  {
+    "id": "anime-017",
+    "season_id": "2026-07",
+    "title": "我家的弟弟们真是让您费心了",
+    "sort_order": 17,
+    "is_approved": true
+  },
+  {
+    "id": "anime-018",
+    "season_id": "2026-07",
+    "title": "正后方的神威",
+    "sort_order": 18,
+    "is_approved": true
+  },
+  {
+    "id": "anime-019",
+    "season_id": "2026-07",
+    "title": "暗黑灯火",
+    "sort_order": 19,
+    "is_approved": true
+  },
+  {
+    "id": "anime-020",
+    "season_id": "2026-07",
+    "title": "岩元前辈的推荐",
+    "sort_order": 20,
+    "is_approved": true
+  },
+  {
+    "id": "anime-021",
+    "season_id": "2026-07",
+    "title": "柔光魔女股份有限公司 第二季",
+    "sort_order": 21,
+    "is_approved": true
+  },
+  {
+    "id": "anime-022",
+    "season_id": "2026-07",
+    "title": "穹庐下的魔女",
+    "sort_order": 22,
+    "is_approved": true
+  },
+  {
+    "id": "anime-023",
+    "season_id": "2026-07",
+    "title": "「我没有爱上你的打算」如此说道的下任公爵大人不知为何开始溺爱我",
+    "sort_order": 23,
+    "is_approved": true
+  },
+  {
+    "id": "anime-024",
+    "season_id": "2026-07",
+    "title": "炒翻天",
+    "sort_order": 24,
+    "is_approved": true
+  },
+  {
+    "id": "anime-025",
+    "season_id": "2026-07",
+    "title": "Let's Go 怪奇组",
+    "sort_order": 25,
+    "is_approved": true
+  },
+  {
+    "id": "anime-026",
+    "season_id": "2026-07",
+    "title": "相反的你和我 第二季",
+    "sort_order": 26,
+    "is_approved": true
+  },
+  {
+    "id": "anime-027",
+    "season_id": "2026-07",
+    "title": "超超超超超喜欢你的100个女朋友 第三季",
+    "sort_order": 27,
+    "is_approved": true
+  },
+  {
+    "id": "anime-028",
+    "season_id": "2026-07",
+    "title": "炎之斗球女弹子",
+    "sort_order": 28,
+    "is_approved": true
+  },
+  {
+    "id": "anime-029",
+    "season_id": "2026-07",
+    "title": "碧蓝之海 第三季",
+    "sort_order": 29,
+    "is_approved": true
+  },
+  {
+    "id": "anime-030",
+    "season_id": "2026-07",
+    "title": "感谢对局~大小姐才不会玩格斗游戏~",
+    "sort_order": 30,
+    "is_approved": true
+  },
+  {
+    "id": "anime-031",
+    "season_id": "2026-07",
+    "title": "与你相恋到生命尽头",
+    "sort_order": 31,
+    "is_approved": true
+  },
+  {
+    "id": "anime-032",
+    "season_id": "2026-07",
+    "title": "拯救替身千金的是冷酷无情冰之王子的爱",
+    "sort_order": 32,
+    "is_approved": true
+  },
+  {
+    "id": "anime-033",
+    "season_id": "2026-07",
+    "title": "攻壳机动队 THE GHOST IN THE SHELL",
+    "sort_order": 33,
+    "is_approved": true
+  },
+  {
+    "id": "anime-034",
+    "season_id": "2026-07",
+    "title": "天是红河岸",
+    "sort_order": 34,
+    "is_approved": true
+  },
+  {
+    "id": "anime-035",
+    "season_id": "2026-07",
+    "title": "克雷瓦提斯 第二季 -魔兽之王与虚伪的勇者传承-",
+    "sort_order": 35,
+    "is_approved": true
+  },
+  {
+    "id": "anime-036",
+    "season_id": "2026-07",
+    "title": "不虐待我的继母与继姐",
+    "sort_order": 36,
+    "is_approved": true
+  },
+  {
+    "id": "anime-037",
+    "season_id": "2026-07",
+    "title": "雷霆三人行",
+    "sort_order": 37,
+    "is_approved": true
+  },
+  {
+    "id": "anime-038",
+    "season_id": "2026-07",
+    "title": "盗掘王",
+    "sort_order": 38,
+    "is_approved": true
+  },
+  {
+    "id": "anime-039",
+    "season_id": "2026-07",
+    "title": "在超市后门吸烟的二人",
+    "sort_order": 39,
+    "is_approved": true
+  },
+  {
+    "id": "anime-040",
+    "season_id": "2026-07",
+    "title": "擅长逃跑的殿下 第二季",
+    "sort_order": 40,
+    "is_approved": true
+  },
+  {
+    "id": "anime-041",
+    "season_id": "2026-07",
+    "title": "花织同学转生后还是想干架",
+    "sort_order": 41,
+    "is_approved": true
+  },
+  {
+    "id": "anime-042",
+    "season_id": "2026-07",
+    "title": "人造人009 涅墨西斯",
+    "sort_order": 42,
+    "is_approved": true
+  },
+  {
+    "id": "anime-043",
+    "season_id": "2026-07",
+    "title": "死神 千年血战篇-祸进谭-",
+    "sort_order": 43,
+    "is_approved": true
+  },
+  {
+    "id": "anime-044",
+    "season_id": "2026-07",
+    "title": "女主角？圣女？不，我是杂役女仆（自豪）！",
+    "sort_order": 44,
+    "is_approved": true
+  },
+  {
+    "id": "anime-045",
+    "season_id": "2026-07",
+    "title": "猫与龙",
+    "sort_order": 45,
+    "is_approved": true
+  },
+  {
+    "id": "anime-046",
+    "season_id": "2026-07",
+    "title": "无自觉圣女今天也无意识地释放力量",
+    "sort_order": 46,
+    "is_approved": true
+  },
+  {
+    "id": "anime-047",
+    "season_id": "2026-07",
+    "title": "LV999的村民",
+    "sort_order": 47,
+    "is_approved": true
+  },
+  {
+    "id": "anime-048",
+    "season_id": "2026-07",
+    "title": "从0位居民开始的边境领主大人",
+    "sort_order": 48,
+    "is_approved": true
+  },
+  {
+    "id": "anime-049",
+    "season_id": "2026-07",
+    "title": "地狱模式 ～喜欢速通游戏的玩家在废设定异世界无双～ 第二季",
+    "sort_order": 49,
+    "is_approved": true
+  },
+  {
+    "id": "anime-050",
+    "season_id": "2026-07",
+    "title": "无职转生 第三季 ～到了异世界就拿出真本事～",
+    "sort_order": 50,
+    "is_approved": true
+  },
+  {
+    "id": "anime-051",
+    "season_id": "2026-07",
+    "title": "鬼之花嫁",
+    "sort_order": 51,
+    "is_approved": true
+  },
+  {
+    "id": "anime-052",
+    "season_id": "2026-07",
+    "title": "才女的侍从 在满是高岭之花的贵族学校暗中照顾（毫无生活自理能力的）学院第一大小姐",
+    "sort_order": 52,
+    "is_approved": true
+  },
+  {
+    "id": "anime-053",
+    "season_id": "2026-07",
+    "title": "世界最强后卫～迷宫国的新人探索者～",
+    "sort_order": 53,
+    "is_approved": true
+  },
+  {
+    "id": "anime-054",
+    "season_id": "2026-07",
+    "title": "二十世纪电气目录",
+    "sort_order": 54,
+    "is_approved": true
+  },
+  {
+    "id": "anime-055",
+    "season_id": "2026-07",
+    "title": "海贼王 女英雄们的故事",
+    "sort_order": 55,
+    "is_approved": true
+  },
+  {
+    "id": "anime-056",
+    "season_id": "2026-07",
+    "title": "『你们先走我断后』，于是10年后我成为了传说",
+    "sort_order": 56,
+    "is_approved": true
+  },
+  {
+    "id": "anime-057",
+    "season_id": "2026-07",
+    "title": "最强废渣皇子暗中活跃于帝位之争",
+    "sort_order": 57,
+    "is_approved": true
+  },
+  {
+    "id": "anime-058",
+    "season_id": "2026-07",
+    "title": "骸骨骑士大人异世界冒险中 第二季",
+    "sort_order": 58,
+    "is_approved": true
+  },
+  {
+    "id": "anime-059",
+    "season_id": "2026-07",
+    "title": "与奔驰于透明之夜的你，谈一场看不见的恋爱。",
+    "sort_order": 59,
+    "is_approved": true
+  },
+  {
+    "id": "anime-060",
+    "season_id": "2026-07",
+    "title": "暴怒千金发誓复仇。～凭借魔导书之力打垮祖国～",
+    "sort_order": 60,
+    "is_approved": true
+  },
+  {
+    "id": "anime-061",
+    "season_id": "2026-07",
+    "title": "转学后班上的清纯可爱美少女，竟是小时候玩在一起的哥儿们",
+    "sort_order": 61,
+    "is_approved": true
+  },
+  {
+    "id": "anime-062",
+    "season_id": "2026-07",
+    "title": "被遗弃圣女的异世界美食之旅",
+    "sort_order": 62,
+    "is_approved": true
+  },
+  {
+    "id": "anime-063",
+    "season_id": "2026-07",
+    "title": "奇招百出的维多利亚",
+    "sort_order": 63,
+    "is_approved": true
+  },
+  {
+    "id": "anime-064",
+    "season_id": "2026-07",
+    "title": "谭雅战记 第二季",
+    "sort_order": 64,
+    "is_approved": true
+  },
+  {
+    "id": "anime-065",
+    "season_id": "2026-07",
+    "title": "乡下大叔成为剑圣 第二季",
+    "sort_order": 65,
+    "is_approved": true
+  },
+  {
+    "id": "anime-066",
+    "season_id": "2026-07",
+    "title": "乙女游戏世界对路人角色很不友好 第二季",
+    "sort_order": 66,
+    "is_approved": true
+  },
+  {
+    "id": "anime-067",
+    "season_id": "2026-07",
+    "title": "恶女不才，请多关照 ～雏宫蝶鼠换身传～",
+    "sort_order": 67,
+    "is_approved": true
+  },
+  {
+    "id": "anime-068",
+    "season_id": "2026-07",
+    "title": "黄泉使者",
+    "sort_order": 68,
+    "is_approved": true
+  },
+  {
+    "id": "anime-069",
+    "season_id": "2026-07",
+    "title": "Re：从零开始的异世界生活 第4期",
+    "sort_order": 69,
+    "is_approved": true
+  }
+]

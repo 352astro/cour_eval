@@ -1,0 +1,58 @@
+name: Deploy anime-review to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare public files
+        run: |
+          set -euo pipefail
+          rm -rf _site && mkdir -p _site
+
+          # 整个站点目录先拷过去
+          rsync -a anime-review/ _site/
+
+          # 再清掉不该公开的东西：本地配置、密钥、服务脚本、构建缓存
+          rm -rf _site/.git _site/.github _site/nginx _site/scripts \
+                 _site/.runtime _site/_site _site/node_modules
+          rm -f  _site/.env _site/.env.local _site/.env.example
+
+          # 安全闸：只要还残留 .env 文件就中止部署，绝不把密钥发到公网
+          if find _site -name '.env*' | grep -q .; then
+            echo "::error::检测到 .env 文件，已中止部署"
+            find _site -name '.env*'
+            exit 1
+          fi
+
+          touch _site/.nojekyll
+          echo "--- 即将发布的内容 ---"
+          ls -la _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

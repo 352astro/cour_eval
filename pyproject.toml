@@ -1,0 +1,13 @@
+[project]
+name = "wechat-official-account-automation"
+version = "0.1.0"
+description = "微信公众号内容自动化脚本"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.50,<2",
+]
+
+[tool.uv]
+package = false
+# 优先复用机器上已安装的兼容 Python；只有找不到时才使用或下载 uv Python。
+python-preference = "system"

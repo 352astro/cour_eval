@@ -1,0 +1,17 @@
+.env
+.env.local
+.env.*.local
+.venv/
+__pycache__/
+*.py[cod]
+**/.DS_Store
+**/.env
+**/.env.local
+**/.env.*.local
+
+# 网站目录中不该进仓库的本地文件
+2026七月新番完结吐槽/
+
+anime-review/.runtime/
+anime-review/_site/
+anime-review/node_modules/

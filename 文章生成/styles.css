@@ -1,0 +1,364 @@
+:root {
+  --ink: #4f4b49;
+  --blue: #88afe9;
+  --blue-dark: #303d82;
+  --paper: #fcf9f1;
+  --orange: #ffbd00;
+  --pink: #ff8fc7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: var(--ink);
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+body {
+  padding: 16px 0 28px;
+}
+
+.copy-toolbar {
+  position: sticky;
+  z-index: 100;
+  top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 36px);
+  max-width: 641px;
+  margin: 0 auto 14px;
+  padding: 9px 10px;
+  border: 1px solid #dce5f2;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 5px 18px rgba(38, 56, 82, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.copy-button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #4169a7;
+  font: 700 15px/38px "PingFang SC", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.copy-button:hover {
+  background: #34598f;
+}
+
+.wechat-article {
+  width: 100%;
+  max-width: 677px;
+  margin: 0 auto;
+  padding: 0 18px;
+  overflow: hidden;
+}
+
+.anime-entry + .anime-entry {
+  margin-top: 46px;
+}
+
+.rating-banner {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 34px;
+  padding: 15px 14px 12px;
+  color: #ffffff;
+  background: var(--blue);
+  border-right: 4px solid var(--blue-dark);
+  border-bottom: 4px solid var(--blue-dark);
+  border-radius: 10px;
+}
+
+.rating-banner p {
+  margin: 0;
+}
+
+.work-name {
+  font-size: 22px;
+  line-height: 1.45;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.average-score {
+  margin-top: 9px !important;
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.average-score strong {
+  font-size: 22px;
+}
+
+.banner-decoration {
+  display: block;
+  width: 42px;
+  height: 5px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 50px 0 0 -1px rgba(255, 255, 255, 0.72);
+}
+
+.banner-tail {
+  position: absolute;
+  left: 10px;
+  bottom: -24px;
+  display: block;
+  width: 0;
+  height: 0;
+  border-top: 24px solid var(--blue-dark);
+  border-right: 17px solid transparent;
+  transform: skewX(-8deg);
+}
+
+.banner-tail-fill {
+  position: absolute;
+  display: block;
+  left: 3px;
+  top: -24px;
+  width: 0;
+  height: 0;
+  border-top: 18px solid var(--blue);
+  border-right: 12px solid transparent;
+}
+
+.cover-figure {
+  margin: 0 12px 10px;
+}
+
+.cover-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 2px solid #d58aa6;
+  border-radius: 3px;
+  box-shadow: 0 2px 7px rgba(46, 38, 51, 0.38);
+}
+
+.review-panel {
+  margin: 0;
+  padding: 16px 12px 12px;
+  background: var(--paper);
+}
+
+.review-list {
+  padding: 0 0 1px 7px;
+  border-left: 2px dashed var(--pink);
+}
+
+.review-item {
+  position: relative;
+  margin: 0 0 26px;
+  padding-left: 7px;
+}
+
+.review-item:last-child {
+  margin-bottom: 10px;
+}
+
+.reviewer {
+  position: relative;
+  display: table;
+  width: 100%;
+  min-height: 74px;
+}
+
+.avatar {
+  display: table-cell;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+.avatar-badged {
+  border: 3px solid #ff8c21;
+}
+
+.avatar-badge {
+  position: absolute;
+  left: 45px;
+  top: -1px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #ff7f24;
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.reviewer-meta {
+  display: table-cell;
+  width: 100%;
+  padding-left: 13px;
+  vertical-align: middle;
+}
+
+.reviewer-meta h3,
+.reviewer-meta p {
+  margin: 0;
+}
+
+.reviewer-meta h3 {
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 800;
+}
+
+.reviewer-meta p {
+  margin-top: 2px;
+  font-size: 17px;
+  line-height: 1.45;
+  letter-spacing: 0.3px;
+}
+
+.connector {
+  width: 1px;
+  height: 18px;
+  margin-left: 33px;
+  background: var(--orange);
+}
+
+.comment-box {
+  position: relative;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--orange);
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.comment-box p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.65;
+  text-align: justify;
+  letter-spacing: 0.6px;
+}
+
+.comment-dot {
+  position: absolute;
+  top: 50%;
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+.comment-dot-left {
+  left: -4px;
+}
+
+.comment-dot-right {
+  right: -4px;
+}
+
+.ending-decoration {
+  height: 37px;
+  margin: 0 14px;
+  text-align: right;
+}
+
+.ending-decoration span {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: -8px;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+}
+
+.ending-decoration span:nth-child(1) {
+  border-bottom: 23px solid #85ddd0;
+}
+
+.ending-decoration span:nth-child(2) {
+  border-bottom: 32px solid #ffd2b5;
+}
+
+.ending-decoration span:nth-child(3) {
+  border-bottom: 18px solid #b8dfea;
+}
+
+.article-ending {
+  padding: 0 4px;
+  text-align: center;
+}
+
+.article-ending p {
+  margin: 7px 0;
+  font-size: 16px;
+  line-height: 1.75;
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 480px) {
+  body {
+    padding-top: 12px;
+  }
+
+  .wechat-article {
+    padding: 0 10px;
+  }
+
+  .copy-toolbar {
+    width: calc(100% - 20px);
+    flex-wrap: wrap;
+  }
+
+  .work-name {
+    font-size: 20px;
+  }
+
+  .average-score {
+    font-size: 18px;
+  }
+
+  .cover-figure {
+    margin-right: 8px;
+    margin-left: 8px;
+  }
+
+  .review-panel {
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+
+  .avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .reviewer-meta h3 {
+    font-size: 17px;
+  }
+
+  .reviewer-meta p,
+  .comment-box p {
+    font-size: 16px;
+  }
+
+  .connector {
+    margin-left: 30px;
+  }
+}

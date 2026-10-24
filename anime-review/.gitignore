@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+_site/
+.runtime/
+*.local.*
+
+.env
+.env.local

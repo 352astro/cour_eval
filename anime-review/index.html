@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f2">
+  <meta name="description" content="记录这一季的心动与吐槽。社团新番评价收集页。">
+  <title>番外话 · 新番评价收集</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="./" aria-label="番外话首页"><span class="brand-icon">番</span><strong>番外话<span class="brand-dot">.</span></strong><span class="brand-caption">社团新番观测站</span></a>
+    <div class="header-actions"><span id="connection-badge" class="connection"><span></span> 正在载入</span><button id="identity-button" class="button button-small">填写我的资料 <span aria-hidden="true">↗</span></button></div>
+  </header>
+
+  <main class="layout">
+    <section class="main-column">
+      <section class="hero">
+        <p class="eyebrow"><span class="tiny-line"></span> SEASONAL ANIME JOURNAL <span class="season-stamp">2026 · SUMMER</span></p>
+        <h1 id="season-title">2026 七月新番<span>你看的番，你来说。</span></h1>
+        <p class="hero-description">给喜欢的故事留一颗星，也给想说的话留个位置。<br>只填你看过的，慢慢写，随时回来接着聊。</p>
+        <div class="hero-meta"><span id="collection-status" class="status-pill">评价征集中</span><span>满分 5 分 · 评分和吐槽均可选填</span></div>
+        <div class="hero-art" aria-hidden="true"><span class="art-orbit"></span><span class="art-spark">✳</span><span class="art-note">这一季，<br>有什么想说的？</span><span class="art-star">✦</span></div>
+      </section>
+
+      <div id="connection-notice" class="notice" hidden><span class="notice-mark">i</span><div><strong>网页已就绪，连接云端后即可开始收集</strong><p>请联系管理员完成云端配置，也可以先体验填写流程。</p></div><button id="demo-button" class="button button-small">本地体验 ↗</button></div>
+      <div id="error-notice" class="notice error-notice" role="alert" hidden><div><strong id="error-title">暂时无法加载云端数据</strong><p id="error-message"></p></div><div class="notice-actions"><button id="error-demo-button" class="button button-small button-outline">先体验界面</button><button id="reload-button" class="text-button">重新连接</button></div></div>
+      <div id="demo-notice" class="demo-notice" hidden>本地体验模式：填写内容只保存在当前浏览器，尚未上传云端。<button id="reset-demo" class="text-button">清空体验数据</button></div>
+
+      <section id="member-view" aria-label="填写新番评价">
+        <div class="section-heading"><div><p class="eyebrow muted">YOUR WATCHLIST</p><h2>这一季的片单 <span id="anime-count">69</span></h2></div><div class="phase-switch" role="group" aria-label="评价阶段"><button data-phase="early">前中期吐槽</button><button data-phase="final" class="active">完结吐槽</button></div></div>
+        <div class="toolbar"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索番剧名称…" aria-label="搜索番剧名称" autocomplete="off"><kbd>/</kbd></label><div class="filter-tabs" role="group" aria-label="填写状态"><button data-filter="all" class="active">全部</button><button data-filter="done">已填写</button><button data-filter="todo">未填写</button></div></div>
+        <div class="list-caption"><span id="list-caption">选择一部番剧，展开写下你的评价</span><span id="global-save" role="status" aria-live="polite">等你开聊</span></div>
+        <div id="anime-list" class="anime-list" aria-live="polite"></div>
+        <div id="empty-state" class="empty-state" hidden><span>⌕</span><h3>这里还没有番剧</h3><p>换个关键词，或联系管理员完善片单。</p><button id="clear-search" class="text-button">查看全部片单</button></div>
+      </section>
+
+      <section id="admin-view" hidden aria-label="管理员汇总">
+        <div class="section-heading"><div><p class="eyebrow muted">CLUB WORKSPACE</p><h2>社团评价汇总</h2></div><button id="back-member" class="button button-small">返回填写</button></div>
+        <div class="admin-settings panel"><h3>本季征集设置</h3><form id="season-form"><label>默认评价阶段<select id="admin-phase"><option value="early">前中期吐槽</option><option value="final">完结吐槽</option></select></label><label class="checkbox-label"><input id="admin-open" type="checkbox">开放填写</label><button class="button" type="submit">保存设置</button></form></div>
+        <div class="panel"><div class="admin-summary-heading"><h3>收集结果</h3><button id="refresh-admin" class="text-button">刷新数据 ↻</button></div><p id="admin-stats" class="muted"></p><label class="search"><span>⌕</span><input id="admin-search" type="search" placeholder="按番名、CN、QQ 号或吐槽内容搜索" aria-label="搜索汇总"></label><div class="export-actions"><button id="export-long" class="button">导出评价明细 ↗</button><button id="export-wide" class="button button-outline">导出原表布局 ↗</button></div><p class="field-help">导出包含 QQ 号，请妥善保管，不要公开传播。均分只计算有效评分，未打分不按 0 分处理。</p><div id="admin-results" class="admin-results"></div></div>
+        <div class="panel"><div class="admin-summary-heading"><h3>番剧管理</h3><button id="add-anime-button" class="button button-small">新增番剧 ＋</button></div><p class="field-help">只有管理员可以新增番剧，新增后直接加入公共片单。</p><div id="admin-anime"></div></div>
+      </section>
+    </section>
+
+    <aside class="sidebar">
+      <section class="progress-card"><div class="card-topline"><span>我的本季记录</span><span class="mini-symbol">↗</span></div><div class="progress-number"><strong id="done-count">00</strong><span>/ <span id="total-count">69</span> 部</span></div><div class="progress-track"><span id="progress-bar"></span></div><p id="progress-caption">看过多少，聊多少。</p><div class="progress-divider"></div><div class="progress-detail"><span>当前阶段</span><strong id="phase-label">完结吐槽</strong></div><div class="progress-detail"><span>保存方式</span><strong id="storage-label">等待连接</strong></div><button id="my-export" class="text-button export-mine">导出我的评价 <span>↗</span></button></section>
+      <section class="guide-card"><span class="guide-icon" aria-hidden="true">✦</span><h3>不用交满分的作业，<br>只聊真实的观感。</h3><ul><li>评分满分 5 分，可精确到 0.1。</li><li>可以只写吐槽，也可以只打分。</li><li>没看的番剧，直接跳过就好。</li><li>写到一半也没关系，会自动保存。</li></ul><p>前中期与完结的评价分别保留，<br>回头看看，那些心情也很有趣。</p></section>
+      <div class="sidebar-foot"><span>FOR THE STORIES WE LOVE</span><p>那些追番的日子，都有话可说。</p></div>
+    </aside>
+  </main>
+
+  <footer class="footer"><span><strong>番外话.</strong> 一份属于大家的追番手记</span><div><button id="admin-button" class="text-button">管理员入口</button><button id="admin-workspace" class="text-button" hidden>管理工作台 ↗</button><button id="admin-logout" class="text-button" hidden>退出管理</button><a href="./README.md" target="_blank" rel="noopener">连接说明 ↗</a></div></footer>
+
+  <dialog id="profile-dialog"><form id="profile-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">NICE TO MEET YOU</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>这次，以什么名字开聊？</h2><p>填写一次，下次在这个浏览器继续。</p><label>你的 CN<input id="profile-cn" name="cn" maxlength="40" autocomplete="nickname" placeholder="大家熟悉的那个名字" required></label><label>QQ 号<input id="profile-qq" name="qq" type="text" inputmode="numeric" autocomplete="off" minlength="5" maxlength="20" pattern="[1-9][0-9]{4,19}" placeholder="5～20 位 QQ 号，仅用于社团联系" required></label><div class="dialog-tip">无需密码。身份记在当前浏览器；清除浏览器数据或换设备后，请联系管理员协助核对旧记录。</div><p id="profile-error" class="form-error" role="alert"></p><button type="submit" class="button button-full">保存资料，开始聊 ↗</button></form></dialog>
+  <dialog id="add-anime-dialog"><form id="add-anime-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">ONE MORE STORY</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>把这部也加进来。</h2><p>新增后直接公开，社员可以为它填写评价。</p><label>番剧名称<input id="add-anime-title" maxlength="200" placeholder="请输入完整番名" required></label><p id="add-anime-error" class="form-error" role="alert"></p><button class="button button-full" type="submit">加入公共片单 ＋</button></form></dialog>
+  <dialog id="admin-dialog"><form id="admin-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">CLUB ADMIN</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>管理员登录</h2><p>使用在 Supabase 中创建并授权的管理员账号。</p><label>邮箱<input id="admin-email" type="email" autocomplete="username" required></label><label>密码<input id="admin-password" type="password" autocomplete="current-password" required></label><p class="field-help">管理会话与社员身份分开，不会覆盖你的填写记录。</p><p id="admin-error" class="form-error" role="alert"></p><button class="button button-full" type="submit">进入管理工作台 ↗</button></form></dialog>
+  <dialog id="confirm-dialog"><form method="dialog" class="dialog-content"><div class="dialog-header"><span class="eyebrow">PLEASE CONFIRM</span><button class="close-button" value="cancel" aria-label="关闭">×</button></div><h2 id="confirm-title">确认清空？</h2><p id="confirm-description"></p><div class="confirmation-actions"><button value="cancel" class="button button-outline">取消，保留内容</button><button id="confirm-submit" value="confirm" class="button">确认清空</button></div></form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
