@@ -30,7 +30,9 @@ export function escapeHTML(value = '') {
 export function csvCell(value) {
   let text = value == null ? '' : String(value);
   // Prevent spreadsheet formula execution when opening user-written text in Excel.
-  if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+  // A leading minus is only dangerous when it is not a plain number (e.g. -1+2).
+  const trimmed = text.trimStart();
+  if (/^[=+@]/.test(trimmed) || (/^-/.test(trimmed) && !Number.isFinite(Number(trimmed)))) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 export function toCSV(rows) { return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'); }
@@ -38,22 +40,35 @@ export function buildExport(anime, reviews, profiles, format = 'long') {
   const people = new Map(profiles.map(p => [p.id, { cn: p.cn || '未命名', qq: p.qq || '' }]));
   const nameOf = id => people.get(id)?.cn || '未命名';
   const qqOf = id => people.get(id)?.qq || '';
-  // 原表布局沿用“CN（QQ）”的表头，明细表则单独列出 QQ 列。
+  // 汇总表把 QQ 写进评分人列名；个人明细则单独列出 QQ 列。
   const labelOf = id => {
     const person = people.get(id);
     return person?.qq ? `${person.cn}（${person.qq}）` : nameOf(id);
   };
-  if (format === 'wide') {
-    const users = [...new Set(reviews.filter(hasContent).map(r => r.user_id))];
-    const header = ['番剧', '项目', '前中期均分', '前中期人数', '完结均分', '完结人数', ...users.flatMap(id => [`${labelOf(id)} / 前中期`, `${labelOf(id)} / 完结`])];
+  if (format === 'summary') {
+    const users = [...new Set(reviews.filter(hasContent).map(r => r.user_id))]
+      .sort((a, b) => labelOf(a).localeCompare(labelOf(b), 'zh-CN'));
+    const header = ['番剧', '项目', '前中期均分', '完结均分', '分差', ...users.flatMap(id => [`${labelOf(id)} / 前中期`, `${labelOf(id)} / 完结`])];
     const rows = [header];
+    const averageOf = (relevant, phase) => {
+      const rated = relevant.filter(r => r.phase === phase && r.score !== null && r.score !== undefined);
+      return rated.length ? rated.reduce((sum, r) => sum + Number(r.score), 0) / rated.length : null;
+    };
+    const round = value => typeof value === 'number' ? +value.toFixed(2) : '';
     for (const a of anime) {
       const relevant = reviews.filter(r => r.anime_id === a.id);
-      const stats = ['early', 'final'].flatMap(phase => {
-        const rated = relevant.filter(r => r.phase === phase && r.score !== null && r.score !== undefined);
-        return [rated.length ? +(rated.reduce((sum, r) => sum + Number(r.score), 0) / rated.length).toFixed(2) : '', rated.length];
-      });
-      for (const field of ['score', 'comment']) rows.push([a.title, field === 'score' ? '评分' : '吐槽', ...(field === 'score' ? stats : ['', '', '', '']), ...users.flatMap(id => ['early', 'final'].map(phase => relevant.find(r => r.user_id === id && r.phase === phase)?.[field] ?? ''))]);
+      const early = round(averageOf(relevant, 'early'));
+      const final = round(averageOf(relevant, 'final'));
+      const diff = early === '' || final === '' ? '' : +(final - early).toFixed(2);
+      // 一部番剧两行：评分行放均分、分差和每人的分数，吐槽行放每人的原文。
+      rows.push([a.title, '评分', early, final, diff, ...users.flatMap(id => ['early', 'final'].map(phase => {
+        const review = relevant.find(r => r.user_id === id && r.phase === phase);
+        return review?.score ?? '';
+      }))]);
+      rows.push([a.title, '吐槽', '', '', '', ...users.flatMap(id => ['early', 'final'].map(phase => {
+        const review = relevant.find(r => r.user_id === id && r.phase === phase);
+        return review?.comment ?? '';
+      }))]);
     }
     return toCSV(rows);
   }

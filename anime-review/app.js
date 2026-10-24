@@ -405,15 +405,16 @@ $('#admin-anime').addEventListener('click', async event => {
     toast(approved ? '已加入公共片单。' : '已撤回公开，原评价仍保留。');
   } catch(error) { button.disabled = false; toast(message(error)); }
 });
-for (const format of ['long','wide']) $(`#export-${format}`).addEventListener('click', async event => {
-  event.target.disabled = true;
+$('#export-summary').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
   try {
     await loadAdmin(state.adminSeasonId);
     const d = state.adminData;
     if (!d) throw new Error('请先选择番季。');
-    download(buildExport(d.anime,d.reviews,d.profiles,format), `${d.season.id}-${format === 'long' ? '评价明细' : '原表汇总'}.csv`);
+    download(buildExport(d.anime,d.reviews,d.profiles,'summary'), `${d.season.id}-汇总表.csv`);
   }
-  catch(error) { toast(message(error)); } finally { event.target.disabled = false; }
+  catch(error) { toast(message(error)); } finally { button.disabled = false; }
 });
 window.addEventListener('beforeunload', event => { if (state.dirty.size) { stashDrafts(); event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('online', () => { if (state.dirty.size) { toast('网络已恢复，正在重试保存。'); void flushAll(); } });
