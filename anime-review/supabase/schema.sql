@@ -1,12 +1,46 @@
 -- 由本机 db:init 命令自动执行。保留已有身份、评价和片单，并升级本应用的结构与权限。
 begin;
 
+-- 一个番季 = 年份 + 季度起始月份（1、4、7、10）。id 统一为 YYYY-MM。
+-- is_current 只能有一个为 true，普通社员只能读取当期番季。
 create table if not exists public.club_seasons (
   id text primary key,
+  year integer not null,
+  month integer not null,
   title text not null check (char_length(btrim(title)) between 1 and 80),
   current_phase text not null default 'final' check (current_phase in ('early', 'final')),
-  is_open boolean not null default true
+  is_open boolean not null default true,
+  is_current boolean not null default false
 );
+alter table public.club_seasons add column if not exists year integer;
+alter table public.club_seasons add column if not exists month integer;
+alter table public.club_seasons add column if not exists is_current boolean not null default false;
+
+-- 旧库只有 2026-07 这类 id，先用 id 回填年份和季度，再收紧约束。
+update public.club_seasons
+set year = case when id ~ '^[0-9]{4}-[0-9]{1,2}$' then split_part(id, '-', 1)::integer else 2026 end
+where year is null;
+update public.club_seasons
+set month = case when id ~ '^[0-9]{4}-[0-9]{1,2}$' then split_part(id, '-', 2)::integer else 7 end
+where month is null;
+alter table public.club_seasons alter column year set not null;
+alter table public.club_seasons alter column month set not null;
+
+alter table public.club_seasons drop constraint if exists club_seasons_year_check;
+alter table public.club_seasons add constraint club_seasons_year_check check (year between 2000 and 2100);
+alter table public.club_seasons drop constraint if exists club_seasons_month_check;
+alter table public.club_seasons add constraint club_seasons_month_check check (month in (1, 4, 7, 10));
+create unique index if not exists club_seasons_year_month on public.club_seasons(year, month);
+
+-- 旧库如果意外存在多个当期，保留 id 最大的一个，避免唯一索引创建失败。
+with ranked as (
+  select id, row_number() over (order by id desc) as position
+  from public.club_seasons where is_current
+)
+update public.club_seasons s set is_current = false
+from ranked r where s.id = r.id and r.position > 1;
+create unique index if not exists club_seasons_one_current on public.club_seasons(is_current) where is_current;
+
 create table if not exists public.club_admins (
   user_id uuid primary key references auth.users(id) on delete cascade
 );
@@ -42,16 +76,22 @@ $$;
 -- Existing profiles may have no QQ yet; all new or updated profiles must supply one.
 alter table public.club_profiles drop constraint if exists club_profiles_qq_required;
 alter table public.club_profiles add constraint club_profiles_qq_required check (qq is not null) not valid;
+
 create table if not exists public.club_anime (
   id text primary key,
   season_id text not null references public.club_seasons(id),
   title text not null check (title = btrim(title) and char_length(title) between 1 and 200),
+  cover_url text,
   sort_order integer not null default 1000,
   is_approved boolean not null default false,
   created_by uuid default auth.uid() references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+alter table public.club_anime add column if not exists cover_url text;
+alter table public.club_anime drop constraint if exists club_anime_cover_url_check;
+alter table public.club_anime add constraint club_anime_cover_url_check check (cover_url is null or cover_url ~* '^https?://');
 create unique index if not exists club_anime_unique_title on public.club_anime(season_id, lower(btrim(title)));
+
 create table if not exists public.club_reviews (
   user_id uuid not null references public.club_profiles(id) on delete cascade,
   anime_id text not null references public.club_anime(id) on delete cascade,
@@ -71,10 +111,15 @@ create trigger club_profile_timestamp before update on public.club_profiles for 
 drop trigger if exists club_review_timestamp on public.club_reviews;
 create trigger club_review_timestamp before update on public.club_reviews for each row execute function public.club_touch_updated_at();
 
+-- 只有“当期且开放”的番剧可以写入评价。旧番季保留评价，但不能继续新增。
 create or replace function public.club_anime_is_open(anime text)
 returns boolean language sql stable security invoker set search_path = '' as $$
-  select exists(select 1 from public.club_anime a join public.club_seasons s on s.id = a.season_id
-    where a.id = anime and s.is_open);
+  select exists(
+    select 1
+    from public.club_anime a
+    join public.club_seasons s on s.id = a.season_id
+    where a.id = anime and a.is_approved and s.is_open and s.is_current
+  );
 $$;
 revoke all on function public.club_anime_is_open(text) from public;
 grant execute on function public.club_anime_is_open(text) to authenticated;
@@ -91,10 +136,13 @@ grant select, insert, update on public.club_profiles to authenticated;
 grant insert, update, delete on public.club_anime to authenticated;
 grant select, insert, update, delete on public.club_reviews to authenticated;
 
+-- 普通社员只能看到当期番季；管理员可以读取全部番季和全部片单。
 drop policy if exists "season read" on public.club_seasons;
-create policy "season read" on public.club_seasons for select to anon, authenticated using (true);
+create policy "season read" on public.club_seasons for select to anon, authenticated
+  using (is_current or (select public.club_is_admin()));
 drop policy if exists "season admin update" on public.club_seasons;
-create policy "season admin update" on public.club_seasons for update to authenticated using ((select public.club_is_admin())) with check ((select public.club_is_admin()));
+create policy "season admin update" on public.club_seasons for update to authenticated
+  using ((select public.club_is_admin())) with check ((select public.club_is_admin()));
 
 drop policy if exists "profile read own or admin" on public.club_profiles;
 create policy "profile read own or admin" on public.club_profiles for select to authenticated using (id = (select auth.uid()) or (select public.club_is_admin()));
@@ -104,7 +152,16 @@ drop policy if exists "profile update own" on public.club_profiles;
 create policy "profile update own" on public.club_profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 drop policy if exists "anime read" on public.club_anime;
-create policy "anime read" on public.club_anime for select to anon, authenticated using (is_approved or (select public.club_is_admin()));
+create policy "anime read" on public.club_anime for select to anon, authenticated using (
+  (select public.club_is_admin())
+  or (
+    is_approved
+    and exists (
+      select 1 from public.club_seasons s
+      where s.id = club_anime.season_id and s.is_current
+    )
+  )
+);
 drop policy if exists "anime suggest" on public.club_anime;
 drop policy if exists "anime admin insert" on public.club_anime;
 create policy "anime admin insert" on public.club_anime for insert to authenticated with check ((select public.club_is_admin()));
@@ -122,9 +179,70 @@ create policy "reviews update own while open" on public.club_reviews for update 
 drop policy if exists "reviews delete own while open" on public.club_reviews;
 create policy "reviews delete own while open" on public.club_reviews for delete to authenticated using (user_id = (select auth.uid()) and public.club_anime_is_open(anime_id));
 
+-- 新建番季和切换当期由管理员调用，客户端不需要直接写 club_seasons。
+create or replace function public.club_create_season(p_year integer, p_month integer)
+returns public.club_seasons
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_id text;
+  v_title text;
+  v_month_label text;
+  v_row public.club_seasons;
+begin
+  if not public.club_is_admin() then
+    raise exception '只有管理员可以创建番季。' using errcode = '42501';
+  end if;
+  if p_year is null or p_year < 2000 or p_year > 2100 then
+    raise exception '年份需在 2000～2100 之间。' using errcode = '22023';
+  end if;
+  if p_month is null or p_month not in (1, 4, 7, 10) then
+    raise exception '季度月份只能是 1、4、7、10。' using errcode = '22023';
+  end if;
+  select * into v_row from public.club_seasons where year = p_year and month = p_month;
+  if found then return v_row; end if;
+  v_id := p_year::text || '-' || lpad(p_month::text, 2, '0');
+  v_month_label := case p_month when 1 then '一月' when 4 then '四月' when 7 then '七月' when 10 then '十月' end;
+  v_title := p_year::text || ' ' || v_month_label || '新番';
+  insert into public.club_seasons (id, year, month, title, current_phase, is_open, is_current)
+  values (v_id, p_year, p_month, v_title, 'early', true, false)
+  returning * into v_row;
+  return v_row;
+end;
+$$;
+revoke all on function public.club_create_season(integer, integer) from public;
+grant execute on function public.club_create_season(integer, integer) to authenticated;
+
+create or replace function public.club_set_current_season(p_season text)
+returns public.club_seasons
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_row public.club_seasons;
+begin
+  if not public.club_is_admin() then
+    raise exception '只有管理员可以切换当期番季。' using errcode = '42501';
+  end if;
+  select * into v_row from public.club_seasons where id = p_season;
+  if not found then
+    raise exception '找不到这个番季，请刷新后重试。' using errcode = 'P0002';
+  end if;
+  update public.club_seasons set is_current = false where is_current;
+  update public.club_seasons set is_current = true where id = p_season returning * into v_row;
+  return v_row;
+end;
+$$;
+revoke all on function public.club_set_current_season(text) from public;
+grant execute on function public.club_set_current_season(text) to authenticated;
+
 -- Remove the legacy scheduled-closing field after replacing its dependent rules.
 alter table public.club_seasons drop column if exists closes_at;
 
-insert into public.club_seasons(id, title, current_phase) values ('2026-07', '2026 七月新番', 'final') on conflict (id) do nothing;
+insert into public.club_seasons(id, year, month, title, current_phase, is_open, is_current)
+values ('2026-07', 2026, 7, '2026 七月新番', 'final', true, false)
+on conflict (id) do update set year = excluded.year, month = excluded.month;
+
+-- 首次升级时把 2026-07 设为当期；已有当期则保持不变。
+update public.club_seasons set is_current = true
+where id = '2026-07' and not exists (select 1 from public.club_seasons where is_current);
+
 select pg_notify('pgrst', 'reload schema');
 commit;

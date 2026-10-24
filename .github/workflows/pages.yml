@@ -31,9 +31,10 @@ jobs:
           # 整个站点目录先拷过去
           rsync -a anime-review/ _site/
 
-          # 再清掉不该公开的东西：本地配置、密钥、服务脚本、构建缓存
+          # 再清掉不该公开的东西：本地配置、密钥、服务脚本、构建缓存、内部笔记和 SQL
           rm -rf _site/.git _site/.github _site/nginx _site/scripts \
-                 _site/.runtime _site/_site _site/node_modules
+                 _site/.runtime _site/_site _site/node_modules \
+                 _site/supabase _site/问题汇总.md
           rm -f  _site/.env _site/.env.local _site/.env.example
 
           # 安全闸：只要还残留 .env 文件就中止部署，绝不把密钥发到公网
@@ -48,6 +49,9 @@ jobs:
           ls -la _site
 
       - uses: actions/configure-pages@v5
+        with:
+          # 首次运行时如果仓库还没启用 Pages，尝试自动启用并切到 GitHub Actions。
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

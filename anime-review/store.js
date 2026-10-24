@@ -20,15 +20,29 @@ export async function createCloudStore(config, scope = 'member') {
     global: { fetch: (url, options = {}) => fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(20000) }) },
   });
   let user = checked(await client.auth.getSession())?.session?.user || null;
+  const animeOfSeason = seasonId => allRows(() => client.from(TABLES.anime).select('*').eq('season_id', seasonId).order('sort_order').order('id'));
+  async function currentSeason() {
+    const season = checked(await client.from(TABLES.seasons).select('*').eq('is_current', true).maybeSingle());
+    if (!season) {
+      const error = new Error('当前还没有设置征集的番季，请联系管理员。');
+      error.code = 'NO_CURRENT_SEASON';
+      throw error;
+    }
+    return season;
+  }
   return {
     mode: 'cloud', client,
     get user() { return user; },
     async publicData() {
-      const [season, anime] = await Promise.all([
-        client.from(TABLES.seasons).select('*').eq('id', config.seasonId).single(),
-        allRows(() => client.from(TABLES.anime).select('*').eq('season_id', config.seasonId).order('sort_order').order('id')),
-      ]);
-      return { season: checked(season), anime };
+      const season = await currentSeason();
+      return { season, anime: await animeOfSeason(season.id) };
+    },
+    async seasonData(seasonId) {
+      const season = checked(await client.from(TABLES.seasons).select('*').eq('id', seasonId).single());
+      return { season, anime: await animeOfSeason(season.id) };
+    },
+    async seasons() {
+      return allRows(() => client.from(TABLES.seasons).select('*').order('year', { ascending: false }).order('month', { ascending: false }));
     },
     async ensureUser() {
       if (!user) user = checked(await client.auth.signInAnonymously()).user;
@@ -48,23 +62,38 @@ export async function createCloudStore(config, scope = 'member') {
       if (!user) throw new Error('请先填写资料。');
       return checked(await client.from(TABLES.reviews).upsert({ user_id: user.id, anime_id: data.anime_id, phase: data.phase, score: data.score, comment: data.comment }, { onConflict: 'user_id,anime_id,phase' }).select().single());
     },
-    async addAnime(title) {
+    async addAnime(title, seasonId) {
       if (scope !== 'admin' || !await this.isAdmin()) throw new Error('只有管理员可以新增番剧。');
-      return checked(await client.from(TABLES.anime).insert({ id: crypto.randomUUID(), season_id: config.seasonId, title, is_approved: true, created_by: user.id }).select().single());
+      return checked(await client.from(TABLES.anime).insert({ id: crypto.randomUUID(), season_id: seasonId, title, is_approved: true, created_by: user.id }).select().single());
     },
     async login(email, password) { user = checked(await client.auth.signInWithPassword({ email, password })).user; },
     async isAdmin() { return Boolean(user && checked(await client.from(TABLES.admins).select('user_id').eq('user_id', user.id).maybeSingle())); },
-    async adminData() {
-      const [reviews, profiles, anime] = await Promise.all([
-        allRows(() => client.from(TABLES.reviews).select('*').order('user_id').order('anime_id').order('phase')),
+    async adminData(seasonId) {
+      const [season, anime, profiles] = await Promise.all([
+        client.from(TABLES.seasons).select('*').eq('id', seasonId).single(),
+        animeOfSeason(seasonId),
         allRows(() => client.from(TABLES.profiles).select('id,cn,qq,updated_at').order('id')),
-        allRows(() => client.from(TABLES.anime).select('*').eq('season_id', config.seasonId).order('sort_order').order('id')),
       ]);
-      const ids = new Set(anime.map(a => a.id));
-      return { reviews: reviews.filter(r => ids.has(r.anime_id)), profiles, anime };
+      const ids = anime.map(a => a.id);
+      const reviews = ids.length
+        ? await allRows(() => client.from(TABLES.reviews).select('*').in('anime_id', ids).order('user_id').order('anime_id').order('phase'))
+        : [];
+      return { season: checked(season), anime, reviews, profiles };
     },
-    async updateSeason(patch) { return checked(await client.from(TABLES.seasons).update(patch).eq('id', config.seasonId).select().single()); },
-    async approve(id,approved=true) { return checked(await client.from(TABLES.anime).update({ is_approved: approved }).eq('id', id).select().single()); },
+    async updateSeason(seasonId, patch) {
+      return checked(await client.from(TABLES.seasons).update(patch).eq('id', seasonId).select().single());
+    },
+    async createSeason(year, month) {
+      if (scope !== 'admin' || !await this.isAdmin()) throw new Error('只有管理员可以创建番季。');
+      const data = checked(await client.rpc('club_create_season', { p_year: year, p_month: month }));
+      return Array.isArray(data) ? data[0] : data;
+    },
+    async setCurrentSeason(seasonId) {
+      if (scope !== 'admin' || !await this.isAdmin()) throw new Error('只有管理员可以切换当期番季。');
+      const data = checked(await client.rpc('club_set_current_season', { p_season: seasonId }));
+      return Array.isArray(data) ? data[0] : data;
+    },
+    async approve(id, approved = true) { return checked(await client.from(TABLES.anime).update({ is_approved: approved }).eq('id', id).select().single()); },
     async logout() { checked(await client.auth.signOut()); user = null; },
   };
 }
@@ -73,11 +102,14 @@ export function createDemoStore(catalog) {
   const key = 'anime-club-demo-v1';
   const stored = JSON.parse(localStorage.getItem(key) || 'null');
   let data = { profile: stored?.profile ? { id: 'local-member', cn: stored.profile.cn, qq: stored.profile.qq || null } : null, reviews: stored?.reviews || [] };
+  const season = { id: '2026-07', year: 2026, month: 7, title: '2026 七月新番', current_phase: 'final', is_open: true, is_current: true };
   const persist = () => localStorage.setItem(key, JSON.stringify(data));
   return {
     mode: 'demo',
     get user() { return data.profile ? { id: 'local-member' } : null; },
-    async publicData() { return { season: { id: '2026-07', title: '2026 七月新番', current_phase: 'final', is_open: true }, anime: catalog }; },
+    async publicData() { return { season, anime: catalog }; },
+    async seasonData() { return { season, anime: catalog }; },
+    async seasons() { return [season]; },
     async profile() { return data.profile; },
     async saveProfile(profile) { data.profile = { id: 'local-member', cn: profile.cn, qq: profile.qq }; persist(); return data.profile; },
     async reviews() { return data.reviews; },

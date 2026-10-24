@@ -20,7 +20,7 @@
   <main class="layout">
     <section class="main-column">
       <section class="hero">
-        <p class="eyebrow"><span class="tiny-line"></span> SEASONAL ANIME JOURNAL <span class="season-stamp">2026 · SUMMER</span></p>
+        <p class="eyebrow"><span class="tiny-line"></span> SEASONAL ANIME JOURNAL <span class="season-stamp" id="season-stamp">2026 · SUMMER</span></p>
         <h1 id="season-title">2026 七月新番<span>你看的番，你来说。</span></h1>
         <p class="hero-description">给喜欢的故事留一颗星，也给想说的话留个位置。<br>只填你看过的，慢慢写，随时回来接着聊。</p>
         <div class="hero-meta"><span id="collection-status" class="status-pill">评价征集中</span><span>满分 5 分 · 评分和吐槽均可选填</span></div>
@@ -41,9 +41,19 @@
 
       <section id="admin-view" hidden aria-label="管理员汇总">
         <div class="section-heading"><div><p class="eyebrow muted">CLUB WORKSPACE</p><h2>社团评价汇总</h2></div><button id="back-member" class="button button-small">返回填写</button></div>
-        <div class="admin-settings panel"><h3>本季征集设置</h3><form id="season-form"><label>默认评价阶段<select id="admin-phase"><option value="early">前中期吐槽</option><option value="final">完结吐槽</option></select></label><label class="checkbox-label"><input id="admin-open" type="checkbox">开放填写</label><button class="button" type="submit">保存设置</button></form></div>
+        <div class="admin-settings panel">
+          <div class="admin-summary-heading"><h3>番季管理</h3><button id="new-season-button" class="button button-small" type="button">新建番季 ＋</button></div>
+          <p id="admin-current-label" class="field-help">正在读取番季…</p>
+          <div class="season-toolbar">
+            <label>查看 / 导出<select id="admin-season" aria-label="选择番季"></select></label>
+            <button id="admin-set-current" class="button button-small" type="button" disabled>设为当期</button>
+          </div>
+          <p class="field-help">普通社员只能看到当期番季；切换查看不会影响社员端。</p>
+          <form id="season-form"><label>默认评价阶段<select id="admin-phase"><option value="early">前中期吐槽</option><option value="final">完结吐槽</option></select></label><label class="checkbox-label"><input id="admin-open" type="checkbox">开放填写</label><button class="button" type="submit">保存设置</button></form>
+        </div>
         <div class="panel"><div class="admin-summary-heading"><h3>收集结果</h3><button id="refresh-admin" class="text-button">刷新数据 ↻</button></div><p id="admin-stats" class="muted"></p><label class="search"><span>⌕</span><input id="admin-search" type="search" placeholder="按番名、CN、QQ 号或吐槽内容搜索" aria-label="搜索汇总"></label><div class="export-actions"><button id="export-long" class="button">导出评价明细 ↗</button><button id="export-wide" class="button button-outline">导出原表布局 ↗</button></div><p class="field-help">导出包含 QQ 号，请妥善保管，不要公开传播。均分只计算有效评分，未打分不按 0 分处理。</p><div id="admin-results" class="admin-results"></div></div>
-        <div class="panel"><div class="admin-summary-heading"><h3>番剧管理</h3><button id="add-anime-button" class="button button-small">新增番剧 ＋</button></div><p class="field-help">只有管理员可以新增番剧，新增后直接加入公共片单。</p><div id="admin-anime"></div></div>
+        <div class="panel"><div class="admin-summary-heading"><h3>所选番季全部番剧</h3><span id="admin-anime-count" class="field-help"></span></div><p class="field-help">当前所选番季的完整片单；切换上方番季可以查看其他季度。</p><div id="admin-season-anime" class="season-anime-list"></div></div>
+        <div class="panel"><div class="admin-summary-heading"><h3>番剧管理</h3><button id="add-anime-button" class="button button-small">新增番剧 ＋</button></div><p class="field-help">只有管理员可以新增番剧，新增后直接加入当前所选番季的片单。</p><div id="admin-anime"></div></div>
       </section>
     </section>
 
@@ -57,8 +67,9 @@
   <footer class="footer"><span><strong>番外话.</strong> 一份属于大家的追番手记</span><div><button id="admin-button" class="text-button">管理员入口</button><button id="admin-workspace" class="text-button" hidden>管理工作台 ↗</button><button id="admin-logout" class="text-button" hidden>退出管理</button><a href="./README.md" target="_blank" rel="noopener">连接说明 ↗</a></div></footer>
 
   <dialog id="profile-dialog"><form id="profile-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">NICE TO MEET YOU</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>这次，以什么名字开聊？</h2><p>填写一次，下次在这个浏览器继续。</p><label>你的 CN<input id="profile-cn" name="cn" maxlength="40" autocomplete="nickname" placeholder="大家熟悉的那个名字" required></label><label>QQ 号<input id="profile-qq" name="qq" type="text" inputmode="numeric" autocomplete="off" minlength="5" maxlength="20" pattern="[1-9][0-9]{4,19}" placeholder="5～20 位 QQ 号，仅用于社团联系" required></label><div class="dialog-tip">无需密码。身份记在当前浏览器；清除浏览器数据或换设备后，请联系管理员协助核对旧记录。</div><p id="profile-error" class="form-error" role="alert"></p><button type="submit" class="button button-full">保存资料，开始聊 ↗</button></form></dialog>
-  <dialog id="add-anime-dialog"><form id="add-anime-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">ONE MORE STORY</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>把这部也加进来。</h2><p>新增后直接公开，社员可以为它填写评价。</p><label>番剧名称<input id="add-anime-title" maxlength="200" placeholder="请输入完整番名" required></label><p id="add-anime-error" class="form-error" role="alert"></p><button class="button button-full" type="submit">加入公共片单 ＋</button></form></dialog>
+  <dialog id="add-anime-dialog"><form id="add-anime-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">ONE MORE STORY</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>把这部也加进来。</h2><p>新增后直接加入当前所选番季；如果它是当期，社员就能看到。</p><label>番剧名称<input id="add-anime-title" maxlength="200" placeholder="请输入完整番名" required></label><p id="add-anime-error" class="form-error" role="alert"></p><button class="button button-full" type="submit">加入片单 ＋</button></form></dialog>
   <dialog id="admin-dialog"><form id="admin-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">CLUB ADMIN</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>管理员登录</h2><p>使用在 Supabase 中创建并授权的管理员账号。</p><label>邮箱<input id="admin-email" type="email" autocomplete="username" required></label><label>密码<input id="admin-password" type="password" autocomplete="current-password" required></label><p class="field-help">管理会话与社员身份分开，不会覆盖你的填写记录。</p><p id="admin-error" class="form-error" role="alert"></p><button class="button button-full" type="submit">进入管理工作台 ↗</button></form></dialog>
+  <dialog id="season-dialog"><form id="season-create-form" class="dialog-content"><div class="dialog-header"><span class="eyebrow">NEW SEASON</span><button type="button" class="close-button" data-close aria-label="关闭">×</button></div><h2>新建一个番季。</h2><p>按年份和季度创建。创建后不会自动切换为当期。</p><label>年份<input id="season-year" type="number" min="2000" max="2100" step="1" required></label><label>季度<select id="season-month"><option value="1">一月（冬）</option><option value="4">四月（春）</option><option value="7">七月（夏）</option><option value="10">十月（秋）</option></select></label><p class="field-help">同一季度已经存在时，会直接选中原来的番季。</p><p id="season-create-error" class="form-error" role="alert"></p><button class="button button-full" type="submit">创建番季 ＋</button></form></dialog>
   <dialog id="confirm-dialog"><form method="dialog" class="dialog-content"><div class="dialog-header"><span class="eyebrow">PLEASE CONFIRM</span><button class="close-button" value="cancel" aria-label="关闭">×</button></div><h2 id="confirm-title">确认清空？</h2><p id="confirm-description"></p><div class="confirmation-actions"><button value="cancel" class="button button-outline">取消，保留内容</button><button id="confirm-submit" value="confirm" class="button">确认清空</button></div></form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>

@@ -7,6 +7,7 @@
 默认筛选 2026 年七月，遍历所有分页，生成脚本同目录下的
 miluxing_2026_07.csv。可用 --year、--month 修改季度；--format both
 同时生成 CSV 和 JSON。两种格式均只包含 title 和 cover_url。
+生成的 CSV 可直接用 anime-review 的 `npm run db:import` 写入 Supabase。
 不进入作品详情页，也不下载封面文件。
 """
 

@@ -7,7 +7,8 @@
     "web": "node scripts/web.mjs",
     "db:init": "node scripts/database.mjs init",
     "db:query": "node scripts/database.mjs query",
-    "db:sql": "node scripts/database.mjs sql"
+    "db:sql": "node scripts/database.mjs sql",
+    "db:import": "node scripts/database.mjs import"
   },
   "engines": {
     "node": ">=22"

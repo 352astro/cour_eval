@@ -94,6 +94,30 @@ npm run db:init
 
 完整初始化需要 Token 具备该项目的 Database、Auth Config、Project Settings 读写权限；未提供公开密钥而需要自动读取时，还需要 API Keys 读取权限。
 
+### 每季度导入新番
+
+先抓取当季列表。脚本会在 `获取动漫资源/` 下生成 `miluxing_年份_月份.csv`，包含 `title` 和 `cover_url` 两列：
+
+```sh
+uv run python "获取动漫资源/miluxing_season_covers.py" --year 2026 --month 10
+```
+
+再进入评价站，把 CSV 导入当前 Supabase 项目：
+
+```sh
+cd anime-review
+npm run db:import -- "../获取动漫资源/miluxing_2026_10.csv" --year 2026 --month 10
+```
+
+- `--year` 和 `--month` 必填；`--month` 只能是 `1`、`4`、`7`、`10`。
+- 导入会自动创建 `2026-10` 这个番季（如果还不存在），并按番名去重、更新封面和排序。重复执行不会重复插入，也不会删除已有评价。
+- 默认只导入，不切换当期。确认片单无误后，在网页底部进入管理员工作台，在「番季管理」里选中该季，点「设为当期」。
+- 想让导入命令顺便切换当期，可以加 `--current`。建议先不加，确认片单和封面后再手动切换。
+- 只想看会执行什么 SQL、不写数据库时，加 `--dry-run`。
+- `cover_url` 会保存到 `club_anime`，当前网页暂不显示封面，后续做封面墙或文章配图时可以直接用。
+
+普通社员只能读取 `is_current = true` 的番季；旧番季的番剧和评价仍保留，管理员可以在工作台切换查看，并按所选番季导出 CSV。
+
 ### 查询数据库
 
 ```sh
@@ -112,9 +136,9 @@ npm run db:sql -- ./修改.sql
 
 `db:query` 和 `db:sql` 只需要对应项目的 Database 权限。底层使用 [Supabase SQL query API](https://supabase.com/docs/reference/api/v1-run-a-query)，该上游接口目前标记为实验性／Beta。
 
-## 本次版本的旧库升级
+## 旧库升级（含番季）
 
-本次改为 QQ 号、仅允许管理员新增番剧，并移除自动截止。已有项目也需要执行数据库升级，不能只刷新前端。
+本次升级新增 `club_seasons.year`、`month`、`is_current`，给 `club_anime` 增加 `cover_url`，并加入新建番季、切换当期的数据库函数。已有项目也需要执行数据库升级，不能只刷新前端。
 
 本地配置好 Token 后，可以直接执行：
 
@@ -122,11 +146,11 @@ npm run db:sql -- ./修改.sql
 npm run db:sql -- supabase/schema.sql
 ```
 
-或者运行上面的 `npm run db:init`，同时完成片单和匿名登录配置核对。
+或者运行上面的 `npm run db:init`，同时完成片单和匿名登录配置核对。升级会把已有的 `2026-07` 补成 2026 年七月；如果库里还没有当期，会自动把它设为当期。已有番季、评价、CN 和管理员授权都会保留。
 
 升级保留现有 CN、评价和管理员授权。旧用户首次进入新版时需要补填 QQ 号；旧手机号不会被当作 QQ 号，历史联系方式仅保留在旧库原字段中，前端不再读取或写入，新库只创建 QQ 字段。旧资料暂时可以没有 QQ，但新增或修改资料时必须填写。
 
-升级会移除旧的自动截止时间字段及相关限制，是否允许填写只由管理员的“开放填写”开关决定。
+升级会移除旧的自动截止时间字段及相关限制，是否允许填写只由管理员的“开放填写”开关决定。`db:init` 会重写 `config.js`，新版不再包含固定的 `seasonId`。
 
 ## 管理员
 
@@ -134,7 +158,12 @@ npm run db:sql -- supabase/schema.sql
 
 新增管理员时，在 Supabase Authentication → Users 创建并确认邮箱用户，将其 UUID 填入 `.env.local` 的 `SUPABASE_ADMIN_USER_ID`，再执行 `npm run db:init`。授权完成后可清空这个可选配置项；清空不会撤销已授予的权限。
 
-管理员可查看全体评价、新增番剧、管理番剧公开状态、切换默认评价阶段、手动开放或关闭填写、导出 CSV（含 QQ 号）。
+管理员可查看全体评价、新增番剧、管理番剧公开状态、切换默认评价阶段、手动开放或关闭填写、导出 CSV（含 QQ 号）。在「番季管理」里还可以：
+
+- 按年份 + 季度（1、4、7、10 月）新建番季；
+- 切换当前查看的番季，查看该季片单和评价；
+- 点「设为当期」决定普通社员能看到的番季；
+- 按所选番季导出评价明细或原表布局。
 
 ## 使用说明
 
@@ -142,6 +171,7 @@ npm run db:sql -- supabase/schema.sql
 - QQ 号是联系资料，不是身份验证凭据。换设备或清除浏览器存储后，不能凭 QQ 号找回原身份。
 - 前中期与完结评价分别保存。评分 0～5，最多一位小数；可以只写吐槽，0 分和未评分分别处理。
 - 输入后自动保存，可查看保存状态；失败时可重试，草稿保留在当前浏览器。
+- 普通社员只能看到当期番季；旧番季不会出现在填写页，但管理员仍可切换查看和导出。切换当期不会删除旧番季的评价。
 - 普通用户不能新增番剧；管理员在工作台新增后直接公开，数据库也限制为仅管理员可新增。
 - 支持个人导出、管理员明细和原表布局导出；导出包含 QQ 号（明细表单独一列，原表布局写在姓名后的括号里）。QQ 号用于联系和生成头像，请妥善保管，不要公开传播。
 - “本地体验”内容仅在当前浏览器，不自动迁移到云端。
@@ -152,9 +182,9 @@ npm run db:sql -- supabase/schema.sql
 
 ## GitHub Pages 部署
 
-将本目录内的文件作为独立仓库根目录上传，包括 `.github`，在仓库 Settings → Pages → Source 选择 **GitHub Actions**。随附工作流只上传指定静态文件和 SDK，不需要安装或构建，也不上传 `.env.local`、管理脚本、Nginx 配置或 SQL 文件。公开的 `config.js` 需随网页上传。
+本仓库的工作流位于根目录 `.github/workflows/pages.yml`，从 `anime-review/` 组装站点；在仓库 Settings → Pages → Source 选择 **GitHub Actions**。工作流只上传网页运行所需文件，不需要安装或构建，也不上传 `.env.local`、管理脚本、Nginx 配置、SQL 文件或内部笔记。公开的 `config.js` 需随网页上传。
 
-如果应用作为其他仓库的子目录，需要将工作流放到仓库根目录并调整复制路径。不要将整个微信公众号工作区上传，避免包含原始社员资料。
+如果只把本目录拆成独立仓库，需要把工作流放到该仓库根目录并调整复制路径。不要将整个微信公众号工作区直接作为静态站点发布，避免包含原始社员资料。
 
 ## 文件结构
 
@@ -166,7 +196,8 @@ npm run db:sql -- supabase/schema.sql
 | `.env.example` / `.env.local` | 本地管理配置示例 / 私有配置 |
 | `scripts/web.mjs` | Nginx 与临时公网隧道启动 |
 | `scripts/serve.mjs` | 本机静态预览 |
-| `scripts/database.mjs`、`scripts/initialize.mjs` | 命令行数据库操作及初始化实现 |
+| `scripts/database.mjs`、`scripts/initialize.mjs` | 命令行数据库操作、导入及初始化实现 |
+| `scripts/import.mjs` | 季度 CSV 解析、去重和导入 SQL 生成 |
 | `nginx/nginx.conf` | 网站托管配置 |
 | `supabase/` | 表结构、权限升级和初始片单 |
 | `vendor/` | Supabase SDK、来源说明和许可 |

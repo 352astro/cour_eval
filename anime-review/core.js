@@ -1,4 +1,9 @@
 export const PHASES = { early: '前中期吐槽', final: '完结吐槽' };
+export const SEASON_MONTHS = { 1: 'WINTER', 4: 'SPRING', 7: 'SUMMER', 10: 'AUTUMN' };
+export const SEASON_MONTH_LABELS = { 1: '一月', 4: '四月', 7: '七月', 10: '十月' };
+export function seasonStamp(season) {
+  return season ? `${season.year} · ${SEASON_MONTHS[season.month] || ''}` : '';
+}
 export function reviewKey(animeId, phase) { return `${animeId}:${phase}`; }
 export function hasContent(review) {
   return review && (review.score !== null && review.score !== undefined || Boolean(review.comment?.trim()));

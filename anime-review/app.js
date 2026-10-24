@@ -1,29 +1,34 @@
-import { PHASES, reviewKey, hasContent, validateScore, validateProfile, isOpen, escapeHTML as esc, buildExport } from './core.js';
+import { PHASES, seasonStamp, reviewKey, hasContent, validateScore, validateProfile, isOpen, escapeHTML as esc, buildExport } from './core.js';
 import { createCloudStore, createDemoStore } from './store.js';
 
 const $ = selector => document.querySelector(selector);
 const config = window.ANIME_CONFIG || {};
 const configured = Boolean(config.supabaseUrl && config.supabasePublishableKey);
-const state = { catalog: [], anime: [], reviews: new Map(), profile: null, season: null, phase: 'final', filter: 'all', query: '', store: null, admin: null, adminData: null, dirty: new Map(), timers: new Map(), saving: new Map(), errors: new Map(), revisions: new Map(), view: 'member' };
+const state = { catalog: [], anime: [], reviews: new Map(), profile: null, season: null, phase: 'final', filter: 'all', query: '', store: null, admin: null, adminData: null, adminSeasons: [], adminSeasonId: null, adminLoadRequest: 0, dirty: new Map(), timers: new Map(), saving: new Map(), errors: new Map(), revisions: new Map(), view: 'member' };
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 4500); }
-function confirmAction(title,description) {
+function confirmAction(title,description,confirmLabel='确认') {
   const dialog=$('#confirm-dialog');
   $('#confirm-title').textContent=title; $('#confirm-description').textContent=description;
+  $('#confirm-submit').textContent=confirmLabel;
   dialog.returnValue='cancel';
   return new Promise(resolve=>{ dialog.addEventListener('close',()=>resolve(dialog.returnValue==='confirm'),{once:true}); dialog.showModal(); });
 }
 function profileReady() { return Boolean(state.profile?.qq); }
 function message(error) {
+  if (error?.code === 'NO_CURRENT_SEASON') return error.message;
   if (error?.code === 'PGRST205' || error?.code === '42P01') return '云端尚未完成配置，请联系管理员。';
   if (error?.code === '23505') return '这部番剧已经在片单中，请不要重复添加。';
+  if (error?.code === 'PGRST116') return '找不到这个番季，请刷新后重试。';
+  if (error?.code === 'P0002') return error.message || '找不到这个番季，请刷新后重试。';
   if (['42703','PGRST204'].includes(error?.code) && /qq/i.test(error.message || '')) return '云端资料结构需要升级，请联系管理员。';
+  if (['42703','PGRST204'].includes(error?.code) && /(year|month|is_current|cover_url)/i.test(error.message || '')) return '云端番季结构需要升级，请管理员运行 db:init。';
   if (error?.code === '42501') return '数据库未允许此操作。征集可能已关闭、账号无权操作，或云端结构需要升级，请刷新并重试。';
   if (/anonymous.*disabled/i.test(error?.message || '')) return '无密码身份尚未启用，请联系管理员完成配置。';
   if (/Failed to fetch|NetworkError|Load failed|timeout|timed out|aborted/i.test(error?.message || '')) return '网络连接暂时不可用，请检查网络后重试。';
   return error?.message || '操作未完成，请稍后重试。';
 }
-function draftKey() { return `anime-club-draft:${state.store?.mode}:${config.supabaseUrl || 'local'}:${config.seasonId}:${state.profile?.id || 'visitor'}`; }
+function draftKey() { return `anime-club-draft:${state.store?.mode}:${config.supabaseUrl || 'local'}:${state.season?.id || 'no-season'}:${state.profile?.id || 'visitor'}`; }
 function stashDrafts() {
   if (!state.profile) return;
   try { localStorage.setItem(draftKey(), JSON.stringify(Object.fromEntries(state.dirty))); }
@@ -49,9 +54,17 @@ function setConnection() {
 }
 function renderSeason() {
   const season = state.season;
-  if (season) $('#season-title').innerHTML = `${esc(season.title)}<span>你看的番，你来说。</span>`;
-  const open = season ? isOpen(season) : true;
-  $('#collection-status').textContent = open ? '评价征集中' : '征集已关闭 · 可以查看';
+  if (season) {
+    $('#season-title').innerHTML = `${esc(season.title)}<span>你看的番，你来说。</span>`;
+    $('#season-stamp').textContent = seasonStamp(season);
+    document.title = `${season.title} · 番外话`;
+  } else {
+    $('#season-title').innerHTML = '新番季<span>等待管理员开启下一季。</span>';
+    $('#season-stamp').textContent = 'NO SEASON';
+    document.title = '番外话 · 新番评价收集';
+  }
+  const open = season ? isOpen(season) : false;
+  $('#collection-status').textContent = !season ? '等待管理员开启' : open ? '评价征集中' : '征集已关闭 · 可以查看';
   $('#collection-status').classList.toggle('closed', !open);
 }
 function updateProgress() {
@@ -81,7 +94,7 @@ function renderList() {
     const index = state.anime.indexOf(a) + 1, key = reviewKey(a.id, state.phase), row = state.reviews.get(key) || emptyReview(a.id), done = hasContent(row);
     const disabled = !profileReady() || !state.store || !isOpen(state.season);
     return `<details class="anime-card" data-id="${esc(a.id)}" ${expanded.has(a.id) ? 'open' : ''}>
-      <summary class="anime-summary"><span class="anime-number">${String(index).padStart(2,'0')}</span><span class="anime-symbol" aria-hidden="true">${['✳','◇','✦','◈'][index % 4]}</span><span class="anime-title-wrap"><span class="anime-title">${esc(a.title)}</span><span class="anime-subtitle">${a.is_approved ? '2026 SUMMER · ANIME' : '管理员暂未公开'}</span></span><span class="review-status ${done ? 'done' : ''}">${done ? row.score === null ? '已写吐槽' : `${row.score} 分` : '未填写'}</span><span class="chevron" aria-hidden="true">›</span></summary>
+      <summary class="anime-summary"><span class="anime-number">${String(index).padStart(2,'0')}</span><span class="anime-symbol" aria-hidden="true">${['✳','◇','✦','◈'][index % 4]}</span><span class="anime-title-wrap"><span class="anime-title">${esc(a.title)}</span><span class="anime-subtitle">${esc(state.season ? `${seasonStamp(state.season)} · ANIME` : 'ANIME')}${a.is_approved ? '' : ' · 管理员暂未公开'}</span></span><span class="review-status ${done ? 'done' : ''}">${done ? row.score === null ? '已写吐槽' : `${row.score} 分` : '未填写'}</span><span class="chevron" aria-hidden="true">›</span></summary>
       <div class="review-editor"><div class="editor-top"><label class="score-label" for="score-${esc(a.id)}">我的评分</label><div class="score-input-wrap"><input id="score-${esc(a.id)}" class="score-input" data-field="score" type="number" min="0" max="5" step="0.1" inputmode="decimal" placeholder="—" value="${esc(row.invalidScore ?? row.score ?? '')}" ${disabled ? 'disabled' : ''}><span class="score-denominator">/ 5</span></div><div class="quick-scores" aria-label="快速评分">${[1,2,3,4,5].map(n => `<button type="button" data-score="${n}" ${disabled ? 'disabled' : ''}>${n}分</button>`).join('')}</div></div>
       <label class="comment-label" for="comment-${esc(a.id)}">${PHASES[state.phase]}<textarea id="comment-${esc(a.id)}" data-field="comment" maxlength="20000" rows="4" placeholder="剧情、角色、作画，或是某个让你记住的瞬间……想说什么都可以。" ${disabled ? 'disabled' : ''}>${esc(row.comment)}</textarea></label>
       <div class="editor-footer"><span class="save-state" data-save-state>${disabled ? !profileReady() ? '先填写 CN 和 QQ 号，就可以开始记录了' : '征集已关闭，记录仍可查看' : '填写后自动保存'}</span><div class="editor-actions">${!profileReady() ? '<button class="text-button" data-login>填写资料 ↗</button>' : '<button class="text-button" data-clear>清空这条</button><button class="text-button" data-save>保存 / 重试 ↗</button>'}</div></div></div></details>`;
@@ -157,6 +170,7 @@ function download(csv, filename) {
 }
 async function exportMine() {
   if (!profileReady()) { openProfile(); return; }
+  if (!state.season) { toast('当前还没有番季，暂时不能导出。'); return; }
   await flushAll();
   if (state.dirty.size) { toast('仍有未保存或无效的内容，请先重试保存，再导出。'); return; }
   const rows = [...state.reviews.values()].filter(r => state.anime.some(a => a.id === r.anime_id));
@@ -167,19 +181,57 @@ function switchView(view) {
   $('#admin-workspace').hidden = !state.admin || view === 'admin';
   if (view === 'admin') $('#admin-view').scrollIntoView({ block:'start', behavior:'smooth' });
 }
-async function loadAdmin() {
-  const data = await state.admin.adminData();
+function renderAdminSeasons() {
+  const selected = state.adminData?.season || state.adminSeasons.find(s => s.id === state.adminSeasonId);
+  const current = state.adminSeasons.find(s => s.is_current);
+  $('#admin-season').innerHTML = state.adminSeasons.map(s => `<option value="${esc(s.id)}" ${s.id === state.adminSeasonId ? 'selected' : ''}>${esc(s.title)}${s.is_current ? ' · 当期' : ''}</option>`).join('');
+  $('#admin-current-label').textContent = current
+    ? `当前对社员展示：${current.title}（${current.id}）`
+    : '还没有设置当期番季；社员端会提示联系管理员。';
+  const isCurrent = Boolean(selected?.is_current);
+  $('#admin-set-current').disabled = !selected || isCurrent;
+  $('#admin-set-current').textContent = isCurrent ? '已是当期' : '设为当期';
+}
+async function refreshMemberData() {
+  if (!state.store) return;
+  const data = await state.store.publicData();
+  state.season = data.season;
+  state.anime = data.anime;
+  state.phase = data.season.current_phase;
+  renderSeason(); renderList();
+}
+async function loadAdmin(seasonId) {
+  const request = ++state.adminLoadRequest;
+  const seasons = await state.admin.seasons();
+  if (request !== state.adminLoadRequest) return;
+  state.adminSeasons = seasons;
+  if (!seasons.length) {
+    state.adminData = null; state.adminSeasonId = null;
+    renderAdminSeasons(); renderAdminResults();
+    $('#admin-stats').textContent = '还没有番季，请先新建一个番季。';
+    $('#admin-anime-count').textContent = '0 部';
+    $('#admin-season-anime').innerHTML = '<p class="field-help">先新建番季，再导入或新增番剧。</p>';
+    $('#admin-anime').innerHTML = '<p class="field-help">先新建番季，再导入或新增番剧。</p>';
+    return;
+  }
+  const target = seasonId || state.adminSeasonId || seasons.find(s => s.is_current)?.id || seasons[0].id;
+  const data = await state.admin.adminData(target);
+  if (request !== state.adminLoadRequest) return;
+  state.adminSeasonId = target;
   state.adminData = data;
-  $('#admin-stats').textContent = `已收到 ${new Set(data.reviews.filter(hasContent).map(r => r.user_id)).size} 位社员的 ${data.reviews.filter(hasContent).length} 条评价。`;
-  const publicData = await state.admin.publicData();
-  state.season = publicData.season;
-  $('#admin-phase').value = state.season.current_phase;
-  $('#admin-open').checked = state.season.is_open;
-  renderAdminResults(); renderSeason();
+  renderAdminSeasons();
+  $('#admin-stats').textContent = `${data.season.title}：已收到 ${new Set(data.reviews.filter(hasContent).map(r => r.user_id)).size} 位社员的 ${data.reviews.filter(hasContent).length} 条评价。`;
+  $('#admin-phase').value = data.season.current_phase;
+  $('#admin-open').checked = data.season.is_open;
+  renderAdminResults();
+  const counts = new Map();
+  for (const review of data.reviews) if (hasContent(review)) counts.set(review.anime_id, (counts.get(review.anime_id) || 0) + 1);
+  $('#admin-anime-count').textContent = `${data.anime.length} 部`;
+  $('#admin-season-anime').innerHTML = data.anime.map((anime, index) => `<div class="suggestion-row"><span><span class="anime-number">${String(index + 1).padStart(2, '0')}</span> ${esc(anime.title)}<small class="field-help">${anime.is_approved ? '已公开' : '待确认'}</small></span><span class="review-status ${counts.get(anime.id) ? 'done' : ''}">${counts.get(anime.id) || 0} 条</span></div>`).join('') || '<p class="field-help">这一季还没有番剧，可以用「新增番剧」或命令行导入。</p>';
   $('#admin-anime').innerHTML = data.anime.filter(a => a.created_by || !a.is_approved).map(a => `<div class="suggestion-row"><span>${esc(a.title)}<small class="field-help">${a.is_approved ? ' · 已加入公共片单' : ' · 待确认'}</small></span><button class="button button-small ${a.is_approved ? 'button-outline' : ''}" ${a.is_approved ? 'data-unapprove' : 'data-approve'}="${esc(a.id)}">${a.is_approved ? '撤回公开' : '确认加入片单'}</button></div>`).join('') || '<p class="field-help">暂时没有新增番剧。</p>';
 }
 function renderAdminResults() {
-  if (!state.adminData) return;
+  if (!state.adminData) { $('#admin-results').innerHTML = '<p class="field-help">选择或新建一个番季后，这里会显示汇总。</p>'; return; }
   const { anime, reviews, profiles } = state.adminData, q = $('#admin-search').value.toLocaleLowerCase().trim();
   const titles = new Map(anime.map(a => [a.id, a.title])), names = new Map(profiles.map(p => [p.id, p.qq ? `${p.cn}（${p.qq}）` : p.cn]));
   const relevant = reviews.filter(hasContent).filter(r => `${titles.get(r.anime_id)} ${names.get(r.user_id)} ${r.comment}`.toLocaleLowerCase().includes(q));
@@ -228,25 +280,27 @@ $('#anime-list').addEventListener('click', async event => {
   if (button.hasAttribute('data-login')) { openProfile(); return; }
   if (button.dataset.score) { card.querySelector('[data-field=score]').value = button.dataset.score; card.querySelector('[data-field=score]').setCustomValidity(''); editReview(id, { score:Number(button.dataset.score), invalidScore:undefined }); }
   if (button.hasAttribute('data-save')) void flushKey(reviewKey(id, state.phase));
-  if (button.hasAttribute('data-clear') && state.profile && isOpen(state.season) && await confirmAction('清空这条评价？','将清空这部番剧当前阶段的评分和吐槽。另一阶段的记录会保留。')) {
+  if (button.hasAttribute('data-clear') && state.profile && isOpen(state.season) && await confirmAction('清空这条评价？','将清空这部番剧当前阶段的评分和吐槽。另一阶段的记录会保留。','确认清空')) {
     card.querySelector('[data-field=score]').value = ''; card.querySelector('[data-field=score]').setCustomValidity(''); card.querySelector('textarea').value = ''; editReview(id, { score:null, comment:'', invalidScore:undefined }); void flushKey(reviewKey(id, state.phase));
   }
 });
 $('#add-anime-button').addEventListener('click', () => {
   if (!state.admin) { toast('只有管理员可以新增番剧。'); return; }
+  if (!state.adminSeasonId) { toast('请先新建或选择一个番季。'); return; }
   $('#add-anime-title').value = ''; $('#add-anime-error').textContent = ''; $('#add-anime-dialog').showModal();
 });
 $('#add-anime-form').addEventListener('submit', async event => {
   event.preventDefault(); event.submitter.disabled = true;
   try {
     if (!state.admin) throw new Error('只有管理员可以新增番剧。');
+    if (!state.adminSeasonId) throw new Error('请先新建或选择一个番季。');
     const title = $('#add-anime-title').value.trim();
     if (!title || title.length > 200) throw new Error('请填写 1～200 字的番剧名称。');
     if (state.adminData.anime.some(a => a.title.toLocaleLowerCase() === title.toLocaleLowerCase())) throw new Error('这部番剧已经在片单中了。');
-    await state.admin.addAnime(title);
-    await loadAdmin();
-    const data = await state.store.publicData(); state.anime = data.anime; renderList();
-    $('#add-anime-dialog').close(); toast('已加入公共片单。');
+    await state.admin.addAnime(title, state.adminSeasonId);
+    await loadAdmin(state.adminSeasonId);
+    if (state.adminData.season.is_current) await refreshMemberData();
+    $('#add-anime-dialog').close(); toast(`已加入「${state.adminData.season.title}」的片单。`);
   } catch(error) { $('#add-anime-error').textContent = message(error); } finally { event.submitter.disabled = false; }
 });
 $('#my-export').addEventListener('click', () => void exportMine());
@@ -254,7 +308,7 @@ async function startDemo() { try { await activate(createDemoStore(state.catalog)
 $('#demo-button').addEventListener('click', startDemo);
 $('#error-demo-button').addEventListener('click', startDemo);
 $('#reset-demo').addEventListener('click', async () => {
-  if (!await confirmAction('清空本地体验数据？','将移除本机的体验资料和评价。云端记录不会受影响。')) return;
+  if (!await confirmAction('清空本地体验数据？','将移除本机的体验资料和评价。云端记录不会受影响。','确认清空')) return;
   for (const timer of state.timers.values()) clearTimeout(timer); await Promise.all([...state.saving.values()]);
   localStorage.removeItem(draftKey()); state.dirty.clear(); state.store.reset(); await activate(state.store); toast('体验数据已清空。');
 });
@@ -273,25 +327,79 @@ $('#admin-form').addEventListener('submit', async event => {
   } catch(error) { $('#admin-error').textContent = message(error); } finally { event.submitter.disabled = false; }
 });
 $('#back-member').addEventListener('click', () => switchView('member'));
-$('#admin-workspace').addEventListener('click', async () => { try { await loadAdmin(); switchView('admin'); } catch(error) { toast(message(error)); } });
-$('#admin-logout').addEventListener('click', async () => { try { await state.admin.logout(); state.admin = null; state.adminData = null; $('#admin-button').hidden = false; $('#admin-logout').hidden = true; switchView('member'); toast('已退出管理员会话，社员身份仍保留。'); } catch(error) { toast(message(error)); } });
-$('#refresh-admin').addEventListener('click', async () => { try { await loadAdmin(); toast('汇总已刷新。'); } catch(error) { toast(message(error)); } });
+$('#admin-workspace').addEventListener('click', async () => { try { await loadAdmin(state.adminSeasonId); switchView('admin'); } catch(error) { toast(message(error)); } });
+$('#admin-logout').addEventListener('click', async () => {
+  try {
+    await state.admin.logout();
+    state.admin = null; state.adminData = null; state.adminSeasons = []; state.adminSeasonId = null; state.adminLoadRequest++;
+    $('#admin-button').hidden = false; $('#admin-logout').hidden = true;
+    switchView('member'); toast('已退出管理员会话，社员身份仍保留。');
+  } catch(error) { toast(message(error)); }
+});
+$('#refresh-admin').addEventListener('click', async () => { try { await loadAdmin(state.adminSeasonId); toast('汇总已刷新。'); } catch(error) { toast(message(error)); } });
 $('#admin-search').addEventListener('input', renderAdminResults);
+$('#admin-season').addEventListener('change', async event => {
+  try { await loadAdmin(event.target.value); } catch(error) { toast(message(error)); }
+});
+$('#new-season-button').addEventListener('click', () => {
+  if (!state.admin) return;
+  const now = new Date();
+  const month = [1, 4, 7, 10].filter(value => value <= now.getMonth() + 1).pop() || 1;
+  $('#season-year').value = now.getFullYear();
+  $('#season-month').value = String(month);
+  $('#season-create-error').textContent = '';
+  $('#season-dialog').showModal();
+});
+$('#season-create-form').addEventListener('submit', async event => {
+  event.preventDefault(); event.submitter.disabled = true;
+  try {
+    if (!state.admin) throw new Error('只有管理员可以创建番季。');
+    const season = await state.admin.createSeason(Number($('#season-year').value), Number($('#season-month').value));
+    await loadAdmin(season.id);
+    $('#season-dialog').close();
+    toast(`「${season.title}」已准备好。确认片单后点「设为当期」。`);
+  } catch(error) { $('#season-create-error').textContent = message(error); } finally { event.submitter.disabled = false; }
+});
+$('#admin-set-current').addEventListener('click', async () => {
+  const season = state.adminData?.season;
+  if (!season || season.is_current) return;
+  if (!await confirmAction('把这一季设为当期？', `设为当期后，普通社员只能看到「${season.title}」。旧番季的评价仍保留，可以在管理台切换查看和导出。`, '设为当期')) return;
+  const button = $('#admin-set-current'); button.disabled = true;
+  try {
+    await state.admin.setCurrentSeason(season.id);
+    await loadAdmin(season.id);
+    try { await refreshMemberData(); } catch { /* 管理员刷新页面后仍会看到新当期 */ }
+    toast(`「${season.title}」已设为当期，社员刷新后生效。`);
+  } catch(error) { toast(message(error)); } finally { renderAdminSeasons(); }
+});
 $('#season-form').addEventListener('submit', async event => {
   event.preventDefault(); event.submitter.disabled = true;
   try {
-    state.season = await state.admin.updateSeason({ current_phase:$('#admin-phase').value, is_open:$('#admin-open').checked });
-    renderSeason(); renderList(); toast('征集设置已更新。');
+    if (!state.adminSeasonId) throw new Error('请先新建或选择一个番季。');
+    const updated = await state.admin.updateSeason(state.adminSeasonId, { current_phase:$('#admin-phase').value, is_open:$('#admin-open').checked });
+    await loadAdmin(state.adminSeasonId);
+    if (updated.is_current) await refreshMemberData();
+    toast(`「${updated.title}」的设置已更新。`);
   } catch(error) { toast(message(error)); } finally { event.submitter.disabled = false; }
 });
 $('#admin-anime').addEventListener('click', async event => {
   const button = event.target.closest('[data-approve],[data-unapprove]'); if (!button) return; button.disabled = true;
   const approved=button.hasAttribute('data-approve'), id=approved ? button.dataset.approve : button.dataset.unapprove;
-  try { await state.admin.approve(id,approved); await loadAdmin(); const data = await state.store.publicData(); state.anime = data.anime; renderList(); toast(approved ? '已加入公共片单。' : '已撤回公开，原评价仍保留。'); } catch(error) { button.disabled = false; toast(message(error)); }
+  try {
+    await state.admin.approve(id,approved);
+    await loadAdmin(state.adminSeasonId);
+    if (state.adminData.season.is_current) await refreshMemberData();
+    toast(approved ? '已加入公共片单。' : '已撤回公开，原评价仍保留。');
+  } catch(error) { button.disabled = false; toast(message(error)); }
 });
 for (const format of ['long','wide']) $(`#export-${format}`).addEventListener('click', async event => {
   event.target.disabled = true;
-  try { await loadAdmin(); const d = state.adminData; download(buildExport(d.anime,d.reviews,d.profiles,format), `${config.seasonId}-${format === 'long' ? '评价明细' : '原表汇总'}.csv`); }
+  try {
+    await loadAdmin(state.adminSeasonId);
+    const d = state.adminData;
+    if (!d) throw new Error('请先选择番季。');
+    download(buildExport(d.anime,d.reviews,d.profiles,format), `${d.season.id}-${format === 'long' ? '评价明细' : '原表汇总'}.csv`);
+  }
   catch(error) { toast(message(error)); } finally { event.target.disabled = false; }
 });
 window.addEventListener('beforeunload', event => { if (state.dirty.size) { stashDrafts(); event.preventDefault(); event.returnValue = ''; } });
@@ -318,7 +426,10 @@ async function init() {
       if (admin.user && await admin.isAdmin()) { state.admin = admin; $('#admin-button').hidden = true; $('#admin-workspace').hidden = false; $('#admin-logout').hidden = false; }
     } catch { toast('管理员会话暂未恢复，需要管理时可重新登录。'); }
   } catch(error) {
-    $('#error-title').textContent = error?.code === 'PGRST205' || error?.code === '42P01' ? '云端尚未初始化' : '暂时无法加载云端数据';
+    if (error?.code === 'NO_CURRENT_SEASON') { state.season = null; state.anime = []; renderSeason(); renderList(); }
+    $('#error-title').textContent = error?.code === 'NO_CURRENT_SEASON'
+      ? '还没有设置当期番季'
+      : error?.code === 'PGRST205' || error?.code === '42P01' ? '云端尚未初始化' : '暂时无法加载云端数据';
     $('#error-message').textContent = message(error); $('#error-notice').hidden = false; setConnection();
   }
 }
