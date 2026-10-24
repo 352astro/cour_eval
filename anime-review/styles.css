@@ -32,9 +32,9 @@
 @media(prefers-reduced-motion:reduce){.skeleton-block::after{animation:none}}
 
 /* 封面缩略图：有图时显示图片，缺图或加载失败时回退到符号。 */
-.anime-cover{position:relative;display:grid;place-items:center;flex-shrink:0;width:40px;height:54px;border:1px solid #ebece4;border-radius:8px;background:#f6f7f1;color:#a1aa90;overflow:hidden}
+.anime-cover{position:relative;display:grid;place-items:center;flex-shrink:0;width:52px;height:72px;border:1px solid #ebece4;border-radius:9px;background:#f6f7f1;color:#a1aa90;overflow:hidden}
 .anime-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.anime-fallback{display:grid;place-items:center;width:100%;height:100%;font-size:19px;line-height:1}
+.anime-fallback{display:grid;place-items:center;width:100%;height:100%;font-size:24px;line-height:1}
 .anime-card:nth-child(4n+2) .anime-cover{background:#fbf2eb;border-color:#f3e8df;color:#c5a58b}
 .anime-card:nth-child(4n+3) .anime-cover{background:#eff2f5;border-color:#e5eaf0;color:#9caabb}
 .anime-card:nth-child(4n+4) .anime-cover{background:#f7f1f4;border-color:#f0e5ea;color:#b9a0ac}
@@ -64,9 +64,18 @@
 .community-pager button{border:0;background:none;padding:0;color:var(--accent);font-size:10px}
 .community-pager button:disabled{color:#c3c8b9}
 
+@media(min-width:1051px){
+  .anime-summary{padding:15px 19px;gap:16px}
+  .review-editor{padding-left:108px}
+}
+.skeleton-card{padding:15px 19px;gap:16px}
+.skeleton-icon{width:52px;height:72px;border-radius:9px}
+
 @media(max-width:760px){
-  .anime-cover{width:36px;height:49px;border-radius:7px}
-  .anime-fallback{font-size:17px}
-  .skeleton-icon{width:36px;height:49px;border-radius:7px}
+  .anime-summary{padding:13px 12px;gap:11px}
+  .anime-cover{width:46px;height:64px;border-radius:8px}
+  .anime-fallback{font-size:21px}
+  .skeleton-card{padding:13px 12px;gap:11px}
+  .skeleton-icon{width:46px;height:64px;border-radius:8px}
   .community-review{padding:10px 11px}
 }
