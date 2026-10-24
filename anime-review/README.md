@@ -90,7 +90,9 @@ Token 可在 [Supabase Access Tokens](https://supabase.com/dashboard/account/tok
 npm run db:init
 ```
 
-命令会执行 `supabase/schema.sql` 和 `supabase/seed.sql`，更新数据表与权限、导入初始片单、启用匿名登录，验证后写入公开连接配置。可重复执行，保留已有身份、评价、番剧和管理员授权。
+命令会执行 `supabase/schema.sql`，更新数据表与权限、创建初始番季（2026-07）、启用匿名登录，验证后写入公开连接配置。片单不再随初始化导入，请用 `npm run db:import` 按季度导入。可重复执行，保留已有身份、番季、评价、番剧和管理员授权。
+
+初始化后如果当期番季还没有片单，网页会显示 0 部；先导入当季 CSV，再到管理台「设为当期」即可。
 
 完整初始化需要 Token 具备该项目的 Database、Auth Config、Project Settings 读写权限；未提供公开密钥而需要自动读取时，还需要 API Keys 读取权限。
 
@@ -146,7 +148,7 @@ npm run db:sql -- ./修改.sql
 npm run db:sql -- supabase/schema.sql
 ```
 
-或者运行上面的 `npm run db:init`，同时完成片单和匿名登录配置核对。升级会把已有的 `2026-07` 补成 2026 年七月；如果库里还没有当期，会自动把它设为当期。已有番季、评价、CN 和管理员授权都会保留。
+或者运行上面的 `npm run db:init`，同时完成结构升级和匿名登录配置核对。升级会把已有的 `2026-07` 补成 2026 年七月；如果库里还没有当期，会自动把它设为当期。已有番季、评价、CN 和管理员授权都会保留。
 
 升级保留现有 CN、评价和管理员授权。旧用户首次进入新版时需要补填 QQ 号；旧手机号不会被当作 QQ 号，历史联系方式仅保留在旧库原字段中，前端不再读取或写入，新库只创建 QQ 字段。旧资料暂时可以没有 QQ，但新增或修改资料时必须填写。
 
@@ -174,11 +176,11 @@ npm run db:sql -- supabase/schema.sql
 - 普通社员只能看到当期番季；旧番季不会出现在填写页，但管理员仍可切换查看和导出。切换当期不会删除旧番季的评价。
 - 普通用户不能新增番剧；管理员在工作台新增后直接公开，数据库也限制为仅管理员可新增。
 - 支持个人导出、管理员明细和原表布局导出；导出包含 QQ 号（明细表单独一列，原表布局写在姓名后的括号里）。QQ 号用于联系和生成头像，请妥善保管，不要公开传播。
-- “本地体验”内容仅在当前浏览器，不自动迁移到云端。
+- 网页只读取云端数据，不提供本地体验模式；云端未配置或暂时不可用时会显示错误提示和重新连接入口。
 
 ## 本机预览
 
-只在本机查看前端、不启动 Nginx 或公网隧道时，可以运行 `npm start`，打开 <http://127.0.0.1:4173/>；端口可用 `PORT=4175 npm start` 调整。预览服务只提供网页静态文件，没有数据库管理接口。
+只在本机查看前端、不启动 Nginx 或公网隧道时，可以运行 `npm start`，打开 <http://127.0.0.1:4173/>；端口可用 `PORT=4175 npm start` 调整。预览服务只提供网页静态文件，没有数据库管理接口。页面会直接读取 `config.js` 中的 Supabase；未配置或网络不可用时只显示错误提示和重新连接入口。
 
 ## GitHub Pages 部署
 
@@ -192,13 +194,13 @@ npm run db:sql -- supabase/schema.sql
 | --- | --- |
 | `index.html`、`styles.css`、`favicon.svg` | 网页及样式 |
 | `app.js`、`core.js`、`store.js` | 交互、评分与导出、数据访问 |
-| `config.js`、`catalog.json` | 公开连接配置和初始片单 |
+| `config.js` | 公开连接配置 |
 | `.env.example` / `.env.local` | 本地管理配置示例 / 私有配置 |
 | `scripts/web.mjs` | Nginx 与临时公网隧道启动 |
 | `scripts/serve.mjs` | 本机静态预览 |
 | `scripts/database.mjs`、`scripts/initialize.mjs` | 命令行数据库操作、导入及初始化实现 |
 | `scripts/import.mjs` | 季度 CSV 解析、去重和导入 SQL 生成 |
 | `nginx/nginx.conf` | 网站托管配置 |
-| `supabase/` | 表结构、权限升级和初始片单 |
+| `supabase/` | 表结构和权限升级 |
 | `vendor/` | Supabase SDK、来源说明和许可 |
 | `.github/workflows/pages.yml` | GitHub Pages 部署配置 |

@@ -25,11 +25,11 @@ export function publicKeyOnly(value) {
   throw new Error('请填写 Publishable key（sb_publishable_ 开头），不能填写 Secret / service_role / 管理 Token。');
 }
 function withoutTransaction(sql) { return sql.replace(/^\s*(?:begin|commit);[\t ]*$/gmi, ''); }
-export function initializationSQL(schema, seed, adminUserId='') {
+export function initializationSQL(schema, adminUserId='') {
   if (adminUserId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUserId)) throw new Error('管理员 UUID 格式不正确。');
   const adminSQL=adminUserId ? `insert into public.club_admins(user_id) values ('${adminUserId}'::uuid) on conflict do nothing;\n` : '';
-  // One transaction and one lock: safe to retry after timeout, no partial schema/seed.
-  return `begin;\nselect pg_advisory_xact_lock(hashtext('anime-club-initialize-v1'));\n${withoutTransaction(schema)}\n${withoutTransaction(seed)}\n${adminSQL}select pg_notify('pgrst', 'reload schema');\ncommit;\n`;
+  // One transaction and one lock: safe to retry after timeout, no partial schema.
+  return `begin;\nselect pg_advisory_xact_lock(hashtext('anime-club-initialize-v1'));\n${withoutTransaction(schema)}\n${adminSQL}select pg_notify('pgrst', 'reload schema');\ncommit;\n`;
 }
 function accessError(status, stage) {
   if (status === 401) return new Error(`${stage}失败：Access Token 无效或已过期，请重新生成。`);
@@ -75,17 +75,14 @@ export async function initializeProject(input, {
     await management('/config/auth', { label:'检查匿名登录配置权限' });
     const base = root instanceof URL ? root : resolve(root);
     const file = name => base instanceof URL ? new URL(name,base) : resolve(base,name);
-    const [schema,seed,catalogRaw] = await Promise.all([
-      readFile(file('supabase/schema.sql'),'utf8'), readFile(file('supabase/seed.sql'),'utf8'), readFile(file('catalog.json'),'utf8'),
-    ]);
-    const catalog = JSON.parse(catalogRaw);
-    stage('database','正在创建或升级数据表、设置权限并导入片单…');
+    const schema = await readFile(file('supabase/schema.sql'),'utf8');
+    stage('database','正在创建或升级数据表、设置权限…');
     await management('/database/query', {
-      method:'POST', body:{ query:initializationSQL(schema,seed,adminUserId), read_only:false }, label:adminUserId ? '初始化数据库或授权管理员（请确认 UUID 对应已有用户）' : '初始化数据库', timeout:120000,
+      method:'POST', body:{ query:initializationSQL(schema, adminUserId), read_only:false }, label:adminUserId ? '初始化数据库或授权管理员（请确认 UUID 对应已有用户）' : '初始化数据库', timeout:120000,
     });
     stage('auth','正在启用匿名登录…');
     await management('/config/auth', { method:'PATCH', body:{ external_anonymous_users_enabled:true }, label:'启用匿名登录' });
-    stage('verify','正在检查网页能否读取云端片单…');
+    stage('verify','正在检查网页能否读取当期番季…');
     let verified = false, currentSeasonId = '';
     for (let attempt=0; attempt<8; attempt++) {
       try {
@@ -96,28 +93,28 @@ export async function initializeProject(input, {
           const seasons = await safeJSON(seasonResponse);
           currentSeasonId = Array.isArray(seasons) ? seasons[0]?.id || '' : '';
           if (currentSeasonId) {
-            const response = await fetchImpl(`${url}/rest/v1/club_anime?select=id&season_id=eq.${encodeURIComponent(currentSeasonId)}&limit=1000`, {
+            const response = await fetchImpl(`${url}/rest/v1/club_anime?select=id&season_id=eq.${encodeURIComponent(currentSeasonId)}&limit=1`, {
               headers:{ apikey:publicKey }, signal:AbortSignal.timeout(10000), redirect:'error',
             });
             if (response.ok) {
-              const rows = await safeJSON(response), ids = new Set(Array.isArray(rows) ? rows.map(row => row.id) : []);
-              // 初始 2026-07 片单必须完整；后续季度只要当期接口可读即可。
-              if (currentSeasonId !== '2026-07' || catalog.every(anime => ids.has(anime.id))) { verified=true; break; }
+              const rows = await safeJSON(response);
+              // 片单由 db:import 导入，初始化只要求当期番季和片单接口可读；空片单也算通过。
+              if (Array.isArray(rows)) { verified=true; break; }
             }
           }
         }
       } catch { /* schema cache and project API may take a moment to become ready */ }
       if (attempt < 7) await wait(1200);
     }
-    if (!verified) throw new Error('数据库和匿名登录已配置，但网页片单验证暂未通过。请检查公开密钥及项目的 Data API 是否启用，然后重试；现有数据会保留。');
+    if (!verified) throw new Error('数据库和匿名登录已配置，但网页番季验证暂未通过。请检查公开密钥及项目的 Data API 是否启用，然后重试；现有数据会保留。');
     stage('config','正在保存网页连接配置…');
     const config = { supabaseUrl:url, supabasePublishableKey:publicKey };
     const content = '// 自动初始化生成。仅含可公开的网页连接信息，不包含管理凭证。\nwindow.ANIME_CONFIG = Object.freeze(' + JSON.stringify(config,null,2) + ');\n';
     const temp = file(`.config.init-${randomUUID()}.tmp`);
     try { await writeFile(temp,content,{ mode:0o600, flag:'wx' }); await rename(temp,file('config.js')); }
     catch { await rm(temp,{force:true}).catch(() => {}); throw new Error('云端初始化已完成，但本地 config.js 写入失败。请检查应用目录的写入权限后重试。'); }
-    const result = { ok:true, projectUrl:url, catalogCount:catalog.length, ...(adminUserId ? {adminConfigured:true} : {}) };
-    stage('done', currentSeasonId === '2026-07' ? `已连接云端，${catalog.length} 部初始番剧已就绪。` : '已连接云端，当前番季可正常读取。');
+    const result = { ok:true, projectUrl:url, ...(adminUserId ? {adminConfigured:true} : {}) };
+    stage('done','已连接云端，当前番季可正常读取。');
     return result;
   } finally {
     // This module never writes the management credential to public files or logs.

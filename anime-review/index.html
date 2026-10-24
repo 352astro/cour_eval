@@ -20,21 +20,26 @@
   <main class="layout">
     <section class="main-column">
       <section class="hero">
-        <p class="eyebrow"><span class="tiny-line"></span> SEASONAL ANIME JOURNAL <span class="season-stamp" id="season-stamp">2026 · SUMMER</span></p>
-        <h1 id="season-title">2026 七月新番<span>你看的番，你来说。</span></h1>
+        <p class="eyebrow"><span class="tiny-line"></span> SEASONAL ANIME JOURNAL <span class="season-stamp" id="season-stamp">LOADING</span></p>
+        <h1 id="season-title">正在读取番季…<span>你看的番，你来说。</span></h1>
         <p class="hero-description">给喜欢的故事留一颗星，也给想说的话留个位置。<br>只填你看过的，慢慢写，随时回来接着聊。</p>
-        <div class="hero-meta"><span id="collection-status" class="status-pill">评价征集中</span><span>满分 5 分 · 评分和吐槽均可选填</span></div>
+        <div class="hero-meta"><span id="collection-status" class="status-pill">正在读取</span><span>满分 5 分 · 评分和吐槽均可选填</span></div>
         <div class="hero-art" aria-hidden="true"><span class="art-orbit"></span><span class="art-spark">✳</span><span class="art-note">这一季，<br>有什么想说的？</span><span class="art-star">✦</span></div>
       </section>
 
-      <div id="connection-notice" class="notice" hidden><span class="notice-mark">i</span><div><strong>网页已就绪，连接云端后即可开始收集</strong><p>请联系管理员完成云端配置，也可以先体验填写流程。</p></div><button id="demo-button" class="button button-small">本地体验 ↗</button></div>
-      <div id="error-notice" class="notice error-notice" role="alert" hidden><div><strong id="error-title">暂时无法加载云端数据</strong><p id="error-message"></p></div><div class="notice-actions"><button id="error-demo-button" class="button button-small button-outline">先体验界面</button><button id="reload-button" class="text-button">重新连接</button></div></div>
-      <div id="demo-notice" class="demo-notice" hidden>本地体验模式：填写内容只保存在当前浏览器，尚未上传云端。<button id="reset-demo" class="text-button">清空体验数据</button></div>
+      <div id="connection-notice" class="notice" hidden><span class="notice-mark">i</span><div><strong>云端尚未配置完成</strong><p>请联系管理员完成 Supabase 连接后刷新页面。</p></div></div>
+      <div id="error-notice" class="notice error-notice" role="alert" hidden><div><strong id="error-title">暂时无法加载云端数据</strong><p id="error-message"></p></div><div class="notice-actions"><button id="reload-button" class="text-button">重新连接</button></div></div>
 
       <section id="member-view" aria-label="填写新番评价">
-        <div class="section-heading"><div><p class="eyebrow muted">YOUR WATCHLIST</p><h2>这一季的片单 <span id="anime-count">69</span></h2></div><div class="phase-switch" role="group" aria-label="评价阶段"><button data-phase="early">前中期吐槽</button><button data-phase="final" class="active">完结吐槽</button></div></div>
+        <div class="section-heading"><div><p class="eyebrow muted">YOUR WATCHLIST</p><h2>这一季的片单 <span id="anime-count">—</span></h2></div><div class="phase-switch" role="group" aria-label="评价阶段"><button data-phase="early">前中期吐槽</button><button data-phase="final">完结吐槽</button></div></div>
         <div class="toolbar"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索番剧名称…" aria-label="搜索番剧名称" autocomplete="off"><kbd>/</kbd></label><div class="filter-tabs" role="group" aria-label="填写状态"><button data-filter="all" class="active">全部</button><button data-filter="done">已填写</button><button data-filter="todo">未填写</button></div></div>
-        <div class="list-caption"><span id="list-caption">选择一部番剧，展开写下你的评价</span><span id="global-save" role="status" aria-live="polite">等你开聊</span></div>
+        <div class="list-caption"><span id="list-caption">正在读取当期番季…</span><span id="global-save" role="status" aria-live="polite">正在连接…</span></div>
+        <div id="loading-state" class="loading-state" aria-hidden="true">
+          <div class="skeleton-card"><span class="skeleton-block skeleton-number"></span><span class="skeleton-block skeleton-icon"></span><span class="skeleton-lines"><span class="skeleton-block skeleton-title"></span><span class="skeleton-block skeleton-subtitle"></span></span><span class="skeleton-block skeleton-status"></span></div>
+          <div class="skeleton-card"><span class="skeleton-block skeleton-number"></span><span class="skeleton-block skeleton-icon"></span><span class="skeleton-lines"><span class="skeleton-block skeleton-title"></span><span class="skeleton-block skeleton-subtitle"></span></span><span class="skeleton-block skeleton-status"></span></div>
+          <div class="skeleton-card"><span class="skeleton-block skeleton-number"></span><span class="skeleton-block skeleton-icon"></span><span class="skeleton-lines"><span class="skeleton-block skeleton-title"></span><span class="skeleton-block skeleton-subtitle"></span></span><span class="skeleton-block skeleton-status"></span></div>
+          <div class="skeleton-card"><span class="skeleton-block skeleton-number"></span><span class="skeleton-block skeleton-icon"></span><span class="skeleton-lines"><span class="skeleton-block skeleton-title"></span><span class="skeleton-block skeleton-subtitle"></span></span><span class="skeleton-block skeleton-status"></span></div>
+        </div>
         <div id="anime-list" class="anime-list" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden><span>⌕</span><h3>这里还没有番剧</h3><p>换个关键词，或联系管理员完善片单。</p><button id="clear-search" class="text-button">查看全部片单</button></div>
       </section>
@@ -58,7 +63,7 @@
     </section>
 
     <aside class="sidebar">
-      <section class="progress-card"><div class="card-topline"><span>我的本季记录</span><span class="mini-symbol">↗</span></div><div class="progress-number"><strong id="done-count">00</strong><span>/ <span id="total-count">69</span> 部</span></div><div class="progress-track"><span id="progress-bar"></span></div><p id="progress-caption">看过多少，聊多少。</p><div class="progress-divider"></div><div class="progress-detail"><span>当前阶段</span><strong id="phase-label">完结吐槽</strong></div><div class="progress-detail"><span>保存方式</span><strong id="storage-label">等待连接</strong></div><button id="my-export" class="text-button export-mine">导出我的评价 <span>↗</span></button></section>
+      <section class="progress-card"><div class="card-topline"><span>我的本季记录</span><span class="mini-symbol">↗</span></div><div class="progress-number"><strong id="done-count">00</strong><span>/ <span id="total-count">—</span> 部</span></div><div class="progress-track"><span id="progress-bar"></span></div><p id="progress-caption">看过多少，聊多少。</p><div class="progress-divider"></div><div class="progress-detail"><span>当前阶段</span><strong id="phase-label">—</strong></div><div class="progress-detail"><span>保存方式</span><strong id="storage-label">等待连接</strong></div><button id="my-export" class="text-button export-mine">导出我的评价 <span>↗</span></button></section>
       <section class="guide-card"><span class="guide-icon" aria-hidden="true">✦</span><h3>不用交满分的作业，<br>只聊真实的观感。</h3><ul><li>评分满分 5 分，可精确到 0.1。</li><li>可以只写吐槽，也可以只打分。</li><li>没看的番剧，直接跳过就好。</li><li>写到一半也没关系，会自动保存。</li></ul><p>前中期与完结的评价分别保留，<br>回头看看，那些心情也很有趣。</p></section>
       <div class="sidebar-foot"><span>FOR THE STORIES WE LOVE</span><p>那些追番的日子，都有话可说。</p></div>
     </aside>

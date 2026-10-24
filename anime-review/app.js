@@ -1,10 +1,10 @@
 import { PHASES, seasonStamp, reviewKey, hasContent, validateScore, validateProfile, isOpen, escapeHTML as esc, buildExport } from './core.js';
-import { createCloudStore, createDemoStore } from './store.js';
+import { createCloudStore } from './store.js';
 
 const $ = selector => document.querySelector(selector);
 const config = window.ANIME_CONFIG || {};
 const configured = Boolean(config.supabaseUrl && config.supabasePublishableKey);
-const state = { catalog: [], anime: [], reviews: new Map(), profile: null, season: null, phase: 'final', filter: 'all', query: '', store: null, admin: null, adminData: null, adminSeasons: [], adminSeasonId: null, adminLoadRequest: 0, dirty: new Map(), timers: new Map(), saving: new Map(), errors: new Map(), revisions: new Map(), view: 'member' };
+const state = { anime: [], loading: true, reviews: new Map(), profile: null, season: null, phase: 'final', filter: 'all', query: '', store: null, admin: null, adminData: null, adminSeasons: [], adminSeasonId: null, adminLoadRequest: 0, dirty: new Map(), timers: new Map(), saving: new Map(), errors: new Map(), revisions: new Map(), view: 'member' };
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 4500); }
 function confirmAction(title,description,confirmLabel='确认') {
@@ -47,10 +47,30 @@ function restoreDrafts() {
 function setConnection() {
   const mode = state.store?.mode;
   $('#connection-badge').className = `connection ${mode || ''}`;
-  $('#connection-badge').innerHTML = `<span></span> ${mode === 'cloud' ? '云端已连接' : mode === 'demo' ? '本地体验' : '尚未连接'}`;
-  $('#storage-label').textContent = mode === 'cloud' ? '云端自动保存' : mode === 'demo' ? '当前浏览器' : '等待连接';
-  $('#connection-notice').hidden = configured || mode === 'demo';
-  $('#demo-notice').hidden = mode !== 'demo';
+  $('#connection-badge').innerHTML = `<span></span> ${mode === 'cloud' ? '云端已连接' : '尚未连接'}`;
+  $('#storage-label').textContent = mode === 'cloud' ? '云端自动保存' : '等待连接';
+  $('#connection-notice').hidden = configured;
+}
+function setLoading(loading) {
+  state.loading = loading;
+  $('#loading-state').hidden = !loading;
+  if (loading) {
+    $('#list-caption').textContent = '正在读取当期番季…';
+    $('#anime-count').textContent = '—';
+    $('#total-count').textContent = '—';
+    $('#done-count').textContent = '00';
+    $('#phase-label').textContent = '—';
+    $('#global-save').textContent = '正在连接云端…';
+    $('#global-save').classList.remove('error');
+    $('#empty-state').hidden = true;
+  } else if (!state.store) {
+    $('#list-caption').textContent = '等待连接云端';
+    $('#global-save').textContent = '等待连接';
+  }
+}
+function setUnavailable(status) {
+  $('#collection-status').textContent = status;
+  $('#collection-status').classList.add('closed');
 }
 function renderSeason() {
   const season = state.season;
@@ -77,7 +97,7 @@ function updateProgress() {
   $('#phase-label').textContent = PHASES[state.phase];
   document.querySelectorAll('[data-phase]').forEach(button => { button.classList.toggle('active', button.dataset.phase === state.phase); button.setAttribute('aria-pressed', String(button.dataset.phase === state.phase)); });
   $('#identity-button').innerHTML = state.profile ? `${esc(state.profile.cn)}${profileReady() ? '' : ' · 补充QQ号'} <span aria-hidden="true">↗</span>` : '填写我的资料 <span aria-hidden="true">↗</span>';
-  let status = !state.store ? '等你开聊' : !profileReady() ? '填写 CN 和 QQ 号后即可保存' : state.dirty.size ? `有 ${state.dirty.size} 条尚未保存` : state.store.mode === 'cloud' ? '所有更改已保存到云端' : '已保存到当前浏览器';
+  let status = !state.store ? '尚未连接云端' : !state.season ? '等待管理员开启番季' : !profileReady() ? '填写 CN 和 QQ 号后即可保存' : state.dirty.size ? `有 ${state.dirty.size} 条尚未保存` : '所有更改已保存到云端';
   if (state.saving.size) status = '正在保存…';
   if (state.errors.size) status = '保存未完成 · 请重试';
   $('#global-save').textContent = status;
@@ -85,6 +105,7 @@ function updateProgress() {
 }
 function emptyReview(id) { return { anime_id: id, phase: state.phase, score: null, comment: '' }; }
 function renderList() {
+  if (state.loading) return;
   const expanded = new Set([...document.querySelectorAll('.anime-card[open]')].map(el => el.dataset.id));
   const filtered = state.anime.filter(a => {
     const done = hasContent(state.reviews.get(reviewKey(a.id, state.phase)));
@@ -117,7 +138,7 @@ function updateCard(id) {
   if (state.errors.has(key)) status.textContent = `${state.errors.get(key)} 点击重试。`;
   else if (state.saving.has(key)) status.textContent = '正在保存…';
   else if (state.dirty.has(key)) status.textContent = '草稿已留在本机 · 等待保存';
-  else if (row?.updated_at) status.textContent = `${state.store?.mode === 'demo' ? '已保存到此浏览器' : '已保存到云端'} · ${new Date(row.updated_at).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })}`;
+  else if (row?.updated_at) status.textContent = `已保存到云端 · ${new Date(row.updated_at).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })}`;
 }
 function editReview(id, patch) {
   if (!profileReady() || !isOpen(state.season)) return;
@@ -160,7 +181,7 @@ async function activate(store) {
   else if (state.dirty.size) { toast('已找回上次未完成的草稿，正在尝试保存。'); void flushAll(); }
 }
 function openProfile() {
-  if (!state.store) { toast('请先连接 Supabase，或点击“本地体验”。'); return; }
+  if (!state.store) { toast('云端尚未连接，请检查网络后重试。'); return; }
   $('#profile-cn').value = state.profile?.cn || ''; $('#profile-qq').value = state.profile?.qq || ''; $('#profile-error').textContent = '';
   $('#profile-dialog').showModal();
 }
@@ -304,14 +325,6 @@ $('#add-anime-form').addEventListener('submit', async event => {
   } catch(error) { $('#add-anime-error').textContent = message(error); } finally { event.submitter.disabled = false; }
 });
 $('#my-export').addEventListener('click', () => void exportMine());
-async function startDemo() { try { await activate(createDemoStore(state.catalog)); if (!state.profile) openProfile(); } catch(error) { toast(message(error)); } }
-$('#demo-button').addEventListener('click', startDemo);
-$('#error-demo-button').addEventListener('click', startDemo);
-$('#reset-demo').addEventListener('click', async () => {
-  if (!await confirmAction('清空本地体验数据？','将移除本机的体验资料和评价。云端记录不会受影响。','确认清空')) return;
-  for (const timer of state.timers.values()) clearTimeout(timer); await Promise.all([...state.saving.values()]);
-  localStorage.removeItem(draftKey()); state.dirty.clear(); state.store.reset(); await activate(state.store); toast('体验数据已清空。');
-});
 $('#reload-button').addEventListener('click', () => location.reload());
 $('#admin-button').addEventListener('click', () => {
   if (!configured) { toast('管理员功能需要先连接 Supabase。'); return; }
@@ -408,25 +421,33 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 
 async function init() {
+  setLoading(true);
+  if (!configured) {
+    setLoading(false);
+    setConnection();
+    setUnavailable('尚未配置');
+    $('#season-title').innerHTML = '云端未配置<span>请联系管理员完成连接。</span>';
+    $('#season-stamp').textContent = 'NO CONFIG';
+    return;
+  }
   try {
-    const response = await fetch('./catalog.json'); if (!response.ok) throw new Error('片单载入失败。');
-    state.catalog = await response.json(); state.anime = state.catalog; renderList();
-    // Explicit preview never contacts the cloud or changes the configured connection.
-    if (new URLSearchParams(location.search).get('preview') === 'local') {
-      await activate(createDemoStore(state.catalog)); return;
-    }
-    if (!configured) {
-      if (localStorage.getItem('anime-club-demo-v1')) await activate(createDemoStore(state.catalog));
-      else setConnection();
-      return;
-    }
-    const cloud = await createCloudStore(config); await activate(cloud);
+    const cloud = await createCloudStore(config);
+    state.loading = false;
+    await activate(cloud);
+    setLoading(false);
     try {
       const admin = await createCloudStore(config,'admin');
       if (admin.user && await admin.isAdmin()) { state.admin = admin; $('#admin-button').hidden = true; $('#admin-workspace').hidden = false; $('#admin-logout').hidden = false; }
     } catch { toast('管理员会话暂未恢复，需要管理时可重新登录。'); }
   } catch(error) {
-    if (error?.code === 'NO_CURRENT_SEASON') { state.season = null; state.anime = []; renderSeason(); renderList(); }
+    setLoading(false);
+    if (error?.code === 'NO_CURRENT_SEASON') {
+      state.season = null; state.anime = []; renderSeason(); renderList();
+    } else {
+      setUnavailable('读取失败');
+      $('#season-title').innerHTML = '暂时无法读取番季<span>请检查网络后重试。</span>';
+      $('#season-stamp').textContent = 'OFFLINE';
+    }
     $('#error-title').textContent = error?.code === 'NO_CURRENT_SEASON'
       ? '还没有设置当期番季'
       : error?.code === 'PGRST205' || error?.code === '42P01' ? '云端尚未初始化' : '暂时无法加载云端数据';

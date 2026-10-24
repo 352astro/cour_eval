@@ -97,28 +97,3 @@ export async function createCloudStore(config, scope = 'member') {
     async logout() { checked(await client.auth.signOut()); user = null; },
   };
 }
-
-export function createDemoStore(catalog) {
-  const key = 'anime-club-demo-v1';
-  const stored = JSON.parse(localStorage.getItem(key) || 'null');
-  let data = { profile: stored?.profile ? { id: 'local-member', cn: stored.profile.cn, qq: stored.profile.qq || null } : null, reviews: stored?.reviews || [] };
-  const season = { id: '2026-07', year: 2026, month: 7, title: '2026 七月新番', current_phase: 'final', is_open: true, is_current: true };
-  const persist = () => localStorage.setItem(key, JSON.stringify(data));
-  return {
-    mode: 'demo',
-    get user() { return data.profile ? { id: 'local-member' } : null; },
-    async publicData() { return { season, anime: catalog }; },
-    async seasonData() { return { season, anime: catalog }; },
-    async seasons() { return [season]; },
-    async profile() { return data.profile; },
-    async saveProfile(profile) { data.profile = { id: 'local-member', cn: profile.cn, qq: profile.qq }; persist(); return data.profile; },
-    async reviews() { return data.reviews; },
-    async saveReview(review) {
-      const row = { ...review, user_id: 'local-member', updated_at: new Date().toISOString() };
-      const index = data.reviews.findIndex(r => r.anime_id === row.anime_id && r.phase === row.phase);
-      if (index < 0) data.reviews.push(row); else data.reviews[index] = row;
-      persist(); return row;
-    },
-    reset() { localStorage.removeItem(key); data = { profile: null, reviews: [] }; },
-  };
-}

@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 
-const files = new Set(['index.html', 'styles.css', 'app.js', 'core.js', 'store.js', 'config.js', 'catalog.json', 'favicon.svg', 'README.md', 'vendor/supabase.js', 'vendor/README.md', 'vendor/SUPABASE-LICENSE.txt']);
+const files = new Set(['index.html', 'styles.css', 'app.js', 'core.js', 'store.js', 'config.js', 'favicon.svg', 'README.md', 'vendor/supabase.js', 'vendor/README.md', 'vendor/SUPABASE-LICENSE.txt']);
 const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml' };
 const port = Number(process.env.PORT || 4173);
 createServer(async (req, res) => {
