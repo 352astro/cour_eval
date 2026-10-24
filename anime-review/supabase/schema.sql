@@ -124,6 +124,24 @@ $$;
 revoke all on function public.club_anime_is_open(text) from public;
 grant execute on function public.club_anime_is_open(text) to authenticated;
 
+-- 社员展开番剧时读取当期公开评价。只返回 CN，不暴露 QQ 或其他用户的身份信息。
+create or replace function public.club_anime_reviews(p_anime text)
+returns table (phase text, score numeric, comment text, updated_at timestamptz, cn text, is_mine boolean)
+language sql stable security definer set search_path = '' as $$
+  select r.phase, r.score, r.comment, r.updated_at, p.cn, r.user_id = (select auth.uid())
+  from public.club_reviews r
+  join public.club_profiles p on p.id = r.user_id
+  join public.club_anime a on a.id = r.anime_id
+  join public.club_seasons s on s.id = a.season_id
+  where r.anime_id = p_anime
+    and a.is_approved
+    and s.is_current
+    and (r.score is not null or btrim(r.comment) <> '')
+  order by r.phase, p.cn;
+$$;
+revoke all on function public.club_anime_reviews(text) from public, anon;
+grant execute on function public.club_anime_reviews(text) to authenticated;
+
 alter table public.club_seasons enable row level security;
 alter table public.club_profiles enable row level security;
 alter table public.club_anime enable row level security;

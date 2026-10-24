@@ -4,7 +4,7 @@ import { createCloudStore } from './store.js';
 const $ = selector => document.querySelector(selector);
 const config = window.ANIME_CONFIG || {};
 const configured = Boolean(config.supabaseUrl && config.supabasePublishableKey);
-const state = { anime: [], loading: true, reviews: new Map(), profile: null, season: null, phase: 'final', filter: 'all', query: '', store: null, admin: null, adminData: null, adminSeasons: [], adminSeasonId: null, adminLoadRequest: 0, dirty: new Map(), timers: new Map(), saving: new Map(), errors: new Map(), revisions: new Map(), view: 'member' };
+const state = { anime: [], loading: true, reviews: new Map(), profile: null, season: null, phase: 'final', filter: 'all', query: '', store: null, admin: null, adminData: null, adminSeasons: [], adminSeasonId: null, adminLoadRequest: 0, dirty: new Map(), timers: new Map(), saving: new Map(), errors: new Map(), revisions: new Map(), view: 'member', community: new Map(), communitySeq: 0 };
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 4500); }
 function confirmAction(title,description,confirmLabel='确认') {
@@ -18,6 +18,7 @@ function profileReady() { return Boolean(state.profile?.qq); }
 function message(error) {
   if (error?.code === 'NO_CURRENT_SEASON') return error.message;
   if (error?.code === 'PGRST205' || error?.code === '42P01') return '云端尚未完成配置，请联系管理员。';
+  if (error?.code === 'PGRST202') return '云端评价功能需要升级，请管理员运行 db:init。';
   if (error?.code === '23505') return '这部番剧已经在片单中，请不要重复添加。';
   if (error?.code === 'PGRST116') return '找不到这个番季，请刷新后重试。';
   if (error?.code === 'P0002') return error.message || '找不到这个番季，请刷新后重试。';
@@ -104,6 +105,70 @@ function updateProgress() {
   $('#global-save').classList.toggle('error', Boolean(state.errors.size));
 }
 function emptyReview(id) { return { anime_id: id, phase: state.phase, score: null, comment: '' }; }
+const COMMUNITY_PAGE_SIZE = 4;
+function communityHTML(id) {
+  const data = state.community.get(id);
+  if (!data) return '';
+  if (data.status === 'loading') return '<div class="community-loading">正在读取大家的评价…</div>';
+  if (data.status === 'error') return `<div class="community-error">${esc(data.error || '评价读取失败。')} <button type="button" class="text-button" data-community-retry>重试 ↗</button></div>`;
+  const items = data.items || [];
+  const head = `<div class="community-head"><h4>大家的评价</h4><div class="community-head-meta"><span>共 ${items.length} 条</span><button type="button" class="text-button" data-community-retry>刷新 ↻</button></div></div>`;
+  if (!items.length) return `${head}<div class="community-empty">还没有人写评价，来当第一个。</div>`;
+  const pages = Math.max(1, Math.ceil(items.length / COMMUNITY_PAGE_SIZE));
+  const page = Math.min(data.page || 0, pages - 1);
+  const cards = items.slice(page * COMMUNITY_PAGE_SIZE, (page + 1) * COMMUNITY_PAGE_SIZE).map(item => {
+    const score = item.score === null || item.score === undefined ? '未打分' : `${item.score} / 5`;
+    const comment = item.comment?.trim() ? esc(item.comment) : '<span class="community-muted">仅评分，没有写吐槽。</span>';
+    const time = item.updated_at ? new Date(item.updated_at).toLocaleDateString('zh-CN', { month:'numeric', day:'numeric' }) : '';
+    return `<article class="community-review"><header><strong>${esc(item.cn || '未命名')}</strong>${item.is_mine ? '<span class="community-mine">我</span>' : ''}<span class="community-badge ${item.phase}">${item.phase === 'early' ? '前中期' : '完结'}</span><span class="community-score">${score}</span>${time ? `<time>${esc(time)}</time>` : ''}</header><p>${comment}</p></article>`;
+  }).join('');
+  const pager = pages > 1 ? `<div class="community-pager"><button type="button" data-community-page="${page - 1}" ${page === 0 ? 'disabled' : ''}>上一页</button><span>第 ${page + 1} / ${pages} 页</span><button type="button" data-community-page="${page + 1}" ${page >= pages - 1 ? 'disabled' : ''}>下一页</button></div>` : '';
+  return `${head}<div class="community-list">${cards}</div>${pager}`;
+}
+function renderCommunity(id) {
+  const card = document.querySelector(`.anime-card[data-id="${CSS.escape(id)}"]`);
+  const host = card?.querySelector('[data-community]');
+  if (host) host.innerHTML = communityHTML(id);
+}
+async function loadCommunity(id, force = false) {
+  if (!state.store) return;
+  const current = state.community.get(id);
+  if (!force && current && (current.status === 'loading' || current.status === 'ready' || current.status === 'error')) return;
+  const seq = ++state.communitySeq;
+  state.community.set(id, { status:'loading', items:[], page:0, seq });
+  renderCommunity(id);
+  try {
+    const items = await state.store.animeReviews(id);
+    if (state.community.get(id)?.seq !== seq) return;
+    state.community.set(id, { status:'ready', items, page:0, seq });
+  } catch (error) {
+    if (state.community.get(id)?.seq !== seq) return;
+    state.community.set(id, { status:'error', items:[], page:0, error: message(error), seq });
+  }
+  renderCommunity(id);
+}
+function syncCommunityReview(review) {
+  const data = state.community.get(review.anime_id);
+  if (!data || data.status !== 'ready') return;
+  const index = data.items.findIndex(item => item.is_mine && item.phase === review.phase);
+  const hasContent = review.score !== null && review.score !== undefined || Boolean(review.comment?.trim());
+  if (!hasContent) {
+    if (index >= 0) data.items.splice(index, 1);
+  } else {
+    const item = { phase: review.phase, score: review.score, comment: review.comment, updated_at: review.updated_at, cn: state.profile?.cn || '未命名', is_mine: true };
+    if (index >= 0) data.items[index] = item; else data.items.push(item);
+    data.items.sort((a, b) => a.phase.localeCompare(b.phase) || (a.cn || '').localeCompare(b.cn || '', 'zh-CN'));
+  }
+  renderCommunity(review.anime_id);
+}
+function changeCommunityPage(id, page) {
+  const data = state.community.get(id);
+  if (!data || data.status !== 'ready') return;
+  const pages = Math.max(1, Math.ceil(data.items.length / COMMUNITY_PAGE_SIZE));
+  data.page = Math.min(Math.max(0, page), pages - 1);
+  renderCommunity(id);
+}
+
 function renderList() {
   if (state.loading) return;
   const expanded = new Set([...document.querySelectorAll('.anime-card[open]')].map(el => el.dataset.id));
@@ -115,15 +180,18 @@ function renderList() {
     const index = state.anime.indexOf(a) + 1, key = reviewKey(a.id, state.phase), row = state.reviews.get(key) || emptyReview(a.id), done = hasContent(row);
     const disabled = !profileReady() || !state.store || !isOpen(state.season);
     return `<details class="anime-card" data-id="${esc(a.id)}" ${expanded.has(a.id) ? 'open' : ''}>
-      <summary class="anime-summary"><span class="anime-number">${String(index).padStart(2,'0')}</span><span class="anime-symbol" aria-hidden="true">${['✳','◇','✦','◈'][index % 4]}</span><span class="anime-title-wrap"><span class="anime-title">${esc(a.title)}</span><span class="anime-subtitle">${esc(state.season ? `${seasonStamp(state.season)} · ANIME` : 'ANIME')}${a.is_approved ? '' : ' · 管理员暂未公开'}</span></span><span class="review-status ${done ? 'done' : ''}">${done ? row.score === null ? '已写吐槽' : `${row.score} 分` : '未填写'}</span><span class="chevron" aria-hidden="true">›</span></summary>
+      <summary class="anime-summary"><span class="anime-number">${String(index).padStart(2,'0')}</span><span class="anime-cover" aria-hidden="true">${a.cover_url ? `<img src="${esc(a.cover_url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}<span class="anime-fallback">${['✳','◇','✦','◈'][index % 4]}</span></span><span class="anime-title-wrap"><span class="anime-title">${esc(a.title)}</span><span class="anime-subtitle">${esc(state.season ? `${seasonStamp(state.season)} · ANIME` : 'ANIME')}${a.is_approved ? '' : ' · 管理员暂未公开'}</span></span><span class="review-status ${done ? 'done' : ''}">${done ? row.score === null ? '已写吐槽' : `${row.score} 分` : '未填写'}</span><span class="chevron" aria-hidden="true">›</span></summary>
       <div class="review-editor"><div class="editor-top"><label class="score-label" for="score-${esc(a.id)}">我的评分</label><div class="score-input-wrap"><input id="score-${esc(a.id)}" class="score-input" data-field="score" type="number" min="0" max="5" step="0.1" inputmode="decimal" placeholder="—" value="${esc(row.invalidScore ?? row.score ?? '')}" ${disabled ? 'disabled' : ''}><span class="score-denominator">/ 5</span></div><div class="quick-scores" aria-label="快速评分">${[1,2,3,4,5].map(n => `<button type="button" data-score="${n}" ${disabled ? 'disabled' : ''}>${n}分</button>`).join('')}</div></div>
       <label class="comment-label" for="comment-${esc(a.id)}">${PHASES[state.phase]}<textarea id="comment-${esc(a.id)}" data-field="comment" maxlength="20000" rows="4" placeholder="剧情、角色、作画，或是某个让你记住的瞬间……想说什么都可以。" ${disabled ? 'disabled' : ''}>${esc(row.comment)}</textarea></label>
-      <div class="editor-footer"><span class="save-state" data-save-state>${disabled ? !profileReady() ? '先填写 CN 和 QQ 号，就可以开始记录了' : '征集已关闭，记录仍可查看' : '填写后自动保存'}</span><div class="editor-actions">${!profileReady() ? '<button class="text-button" data-login>填写资料 ↗</button>' : '<button class="text-button" data-clear>清空这条</button><button class="text-button" data-save>保存 / 重试 ↗</button>'}</div></div></div></details>`;
+      <div class="editor-footer"><span class="save-state" data-save-state>${disabled ? !profileReady() ? '先填写 CN 和 QQ 号，就可以开始记录了' : '征集已关闭，记录仍可查看' : '填写后自动保存'}</span><div class="editor-actions">${!profileReady() ? '<button class="text-button" data-login>填写资料 ↗</button>' : '<button class="text-button" data-clear>清空这条</button><button class="text-button" data-save>保存 / 重试 ↗</button>'}</div></div><div class="community" data-community>${communityHTML(a.id)}</div></div></details>`;
   }).join('');
   $('#empty-state').hidden = Boolean(filtered.length);
   $('#list-caption').textContent = state.query || state.filter !== 'all' ? `找到 ${filtered.length} 部番剧` : '选择一部番剧，展开写下你的评价';
   document.querySelectorAll('[data-filter]').forEach(b => { b.classList.toggle('active', b.dataset.filter === state.filter); b.setAttribute('aria-pressed', String(b.dataset.filter === state.filter)); });
-  for (const a of filtered) updateCard(a.id);
+  for (const a of filtered) {
+    updateCard(a.id);
+    if (document.querySelector(`.anime-card[data-id="${CSS.escape(a.id)}"]`)?.open) void loadCommunity(a.id);
+  }
   updateProgress();
 }
 function updateCard(id) {
@@ -160,7 +228,7 @@ async function flushKey(key) {
         if (!isOpen(state.season)) throw new Error('征集已关闭，草稿保留在本机。');
         if (row.invalidScore !== undefined) throw new Error('评分需为 0～5，最多一位小数。');
         const saved = await state.store.saveReview(row);
-        if (state.revisions.get(key) === revision) { state.reviews.set(key, saved); state.dirty.delete(key); state.errors.delete(key); stashDrafts(); }
+        if (state.revisions.get(key) === revision) { state.reviews.set(key, saved); state.dirty.delete(key); state.errors.delete(key); stashDrafts(); syncCommunityReview(saved); }
       } catch (error) { state.errors.set(key, message(error)); break; }
     }
   })();
@@ -176,6 +244,7 @@ async function activate(store) {
   state.store = store; state.season = data.season; state.anime = data.anime; state.profile = profile; state.phase = data.season.current_phase;
   state.reviews = new Map(reviews.map(r => [reviewKey(r.anime_id, r.phase), r]));
   state.dirty.clear(); state.errors.clear();
+  state.community.clear(); state.communitySeq++;
   restoreDrafts(); setConnection(); renderSeason(); renderList(); $('#error-notice').hidden = true;
   if (state.profile && !profileReady()) { toast('请补充 QQ 号，原有评价仍会保留。'); openProfile(); }
   else if (state.dirty.size) { toast('已找回上次未完成的草稿，正在尝试保存。'); void flushAll(); }
@@ -219,6 +288,7 @@ async function refreshMemberData() {
   state.season = data.season;
   state.anime = data.anime;
   state.phase = data.season.current_phase;
+  state.community.clear(); state.communitySeq++;
   renderSeason(); renderList();
 }
 async function loadAdmin(seasonId) {
@@ -274,6 +344,7 @@ $('#profile-form').addEventListener('submit', async event => {
     state.profile = await state.store.saveProfile(data);
     const reviews = await state.store.reviews();
     for (const r of reviews) if (!state.dirty.has(reviewKey(r.anime_id,r.phase))) state.reviews.set(reviewKey(r.anime_id,r.phase), r);
+    state.community.clear(); state.communitySeq++;
     restoreDrafts(); $('#profile-dialog').close(); renderList();
     if (state.dirty.size) void flushAll();
     toast(state.store.mode === 'cloud' ? '资料已保存，可以开始记录啦。' : '体验资料已保存在当前浏览器。');
@@ -294,10 +365,20 @@ $('#anime-list').addEventListener('input', event => {
     catch(error) { input.setCustomValidity(message(error)); editReview(id, { score: null, invalidScore: input.value }); state.errors.set(reviewKey(id,state.phase), message(error)); updateCard(id); updateProgress(); }
   } else editReview(id, { comment: input.value });
 });
+$('#anime-list').addEventListener('toggle', event => {
+  const card = event.target.closest('.anime-card');
+  if (card?.open) void loadCommunity(card.dataset.id);
+}, true);
+$('#anime-list').addEventListener('error', event => {
+  const image = event.target;
+  if (image instanceof HTMLImageElement && image.closest('.anime-cover')) image.hidden = true;
+}, true);
 $('#anime-list').addEventListener('click', async event => {
   const button = event.target.closest('button'), card = button?.closest('.anime-card');
   if (!button || !card) return;
   const id = card.dataset.id;
+  if (button.dataset.communityPage !== undefined) { changeCommunityPage(id, Number(button.dataset.communityPage)); return; }
+  if (button.hasAttribute('data-community-retry')) { void loadCommunity(id, true); return; }
   if (button.hasAttribute('data-login')) { openProfile(); return; }
   if (button.dataset.score) { card.querySelector('[data-field=score]').value = button.dataset.score; card.querySelector('[data-field=score]').setCustomValidity(''); editReview(id, { score:Number(button.dataset.score), invalidScore:undefined }); }
   if (button.hasAttribute('data-save')) void flushKey(reviewKey(id, state.phase));

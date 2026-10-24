@@ -20,6 +20,7 @@ export async function createCloudStore(config, scope = 'member') {
     global: { fetch: (url, options = {}) => fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(20000) }) },
   });
   let user = checked(await client.auth.getSession())?.session?.user || null;
+  let userTask = null;
   const animeOfSeason = seasonId => allRows(() => client.from(TABLES.anime).select('*').eq('season_id', seasonId).order('sort_order').order('id'));
   async function currentSeason() {
     const season = checked(await client.from(TABLES.seasons).select('*').eq('is_current', true).maybeSingle());
@@ -45,7 +46,14 @@ export async function createCloudStore(config, scope = 'member') {
       return allRows(() => client.from(TABLES.seasons).select('*').order('year', { ascending: false }).order('month', { ascending: false }));
     },
     async ensureUser() {
-      if (!user) user = checked(await client.auth.signInAnonymously()).user;
+      if (!user) {
+        // 同一页面可能同时触发“保存资料”和“读取评价”，只创建一次匿名身份。
+        userTask ||= (async () => {
+          user = checked(await client.auth.signInAnonymously()).user;
+          return user;
+        })().finally(() => { userTask = null; });
+        await userTask;
+      }
       if (!user) throw new Error('无法创建匿名身份，请检查是否已启用 Anonymous Sign-Ins。');
       return user;
     },
@@ -57,6 +65,10 @@ export async function createCloudStore(config, scope = 'member') {
     async reviews() {
       if (!user) return [];
       return allRows(() => client.from(TABLES.reviews).select('*').eq('user_id', user.id).order('anime_id').order('phase'));
+    },
+    async animeReviews(animeId) {
+      if (!user) await this.ensureUser();
+      return checked(await client.rpc('club_anime_reviews', { p_anime: animeId }));
     },
     async saveReview(data) {
       if (!user) throw new Error('请先填写资料。');
