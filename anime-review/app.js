@@ -14,12 +14,15 @@ function confirmAction(title,description,confirmLabel='确认') {
   dialog.returnValue='cancel';
   return new Promise(resolve=>{ dialog.addEventListener('close',()=>resolve(dialog.returnValue==='confirm'),{once:true}); dialog.showModal(); });
 }
-function profileReady() { return Boolean(state.profile?.qq); }
+function profileReady() { return Boolean(state.profile?.cn && state.profile?.qq); }
 function message(error) {
   if (error?.code === 'NO_CURRENT_SEASON') return error.message;
   if (error?.code === 'PGRST205' || error?.code === '42P01') return '云端尚未完成配置，请联系管理员。';
   if (error?.code === 'PGRST202') return '云端评价功能需要升级，请管理员运行 db:init。';
-  if (error?.code === '23505') return '这部番剧已经在片单中，请不要重复添加。';
+  if (error?.code === '23505') {
+    if (/qq|club_profiles_unique_qq/i.test(`${error.message || ''} ${error.details || ''}`)) return '这个 QQ 已经登记过了，请填写原来的 CN，或联系管理员合并。';
+    return '这部番剧已经在片单中，请不要重复添加。';
+  }
   if (error?.code === 'PGRST116') return '找不到这个番季，请刷新后重试。';
   if (error?.code === 'P0002') return error.message || '找不到这个番季，请刷新后重试。';
   if (['42703','PGRST204'].includes(error?.code) && /qq/i.test(error.message || '')) return '云端资料结构需要升级，请联系管理员。';
@@ -102,7 +105,7 @@ function updateProgress() {
   $('#progress-caption').textContent = done ? `已经为 ${done} 部番剧留下了你的声音。` : '看过多少，聊多少。';
   $('#phase-label').textContent = PHASES[state.phase];
   document.querySelectorAll('[data-phase]').forEach(button => { button.classList.toggle('active', button.dataset.phase === state.phase); button.setAttribute('aria-pressed', String(button.dataset.phase === state.phase)); });
-  $('#identity-button').innerHTML = state.profile ? `${esc(state.profile.cn)}${profileReady() ? '' : ' · 补充QQ号'} <span aria-hidden="true">↗</span>` : '填写我的资料 <span aria-hidden="true">↗</span>';
+  $('#identity-button').innerHTML = state.profile ? `${esc(state.profile.cn)}${profileReady() ? '' : ' · 补充资料'} <span aria-hidden="true">↗</span>` : '登录 / 资料 <span aria-hidden="true">↗</span>';
   let status = !state.store ? '尚未连接云端' : !state.season ? '等待管理员开启番季' : !profileReady() ? '填写 CN 和 QQ 号后即可保存' : state.dirty.size ? `有 ${state.dirty.size} 条尚未保存` : '所有更改已保存到云端';
   if (state.saving.size) status = '正在保存…';
   if (state.errors.size) status = '保存未完成 · 请重试';
@@ -251,7 +254,7 @@ async function activate(store) {
   state.dirty.clear(); state.errors.clear();
   state.community.clear(); state.communitySeq++;
   restoreDrafts(); setConnection(); renderSeason(); renderList(); $('#error-notice').hidden = true;
-  if (state.profile && !profileReady()) { toast('请补充 QQ 号，原有评价仍会保留。'); openProfile(); }
+  if (state.profile && !profileReady()) { toast('请补充 CN 和 QQ 号，原有评价仍会保留。'); openProfile(); }
   else if (state.dirty.size) { toast('已找回上次未完成的草稿，正在尝试保存。'); void flushAll(); }
 }
 function openProfile() {
@@ -346,7 +349,7 @@ $('#profile-form').addEventListener('submit', async event => {
   event.preventDefault(); const button = event.submitter; button.disabled = true; $('#profile-error').textContent = '';
   try {
     const data = validateProfile($('#profile-cn').value, $('#profile-qq').value);
-    state.profile = await state.store.saveProfile(data);
+    state.profile = await state.store.loginProfile(data);
     const reviews = await state.store.reviews();
     for (const r of reviews) if (!state.dirty.has(reviewKey(r.anime_id,r.phase))) state.reviews.set(reviewKey(r.anime_id,r.phase), r);
     state.community.clear(); state.communitySeq++;

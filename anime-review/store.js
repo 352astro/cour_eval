@@ -21,6 +21,7 @@ export async function createCloudStore(config, scope = 'member') {
   });
   let user = checked(await client.auth.getSession())?.session?.user || null;
   let userTask = null;
+  let profileId = null;
   const animeOfSeason = seasonId => allRows(() => client.from(TABLES.anime).select('*').eq('season_id', seasonId).order('sort_order').order('id'));
   async function currentSeason() {
     const season = checked(await client.from(TABLES.seasons).select('*').eq('is_current', true).maybeSingle());
@@ -57,28 +58,36 @@ export async function createCloudStore(config, scope = 'member') {
       if (!user) throw new Error('无法创建匿名身份，请检查是否已启用 Anonymous Sign-Ins。');
       return user;
     },
-    async profile() { return user ? checked(await client.from(TABLES.profiles).select('id,cn,qq,updated_at').eq('id', user.id).maybeSingle()) : null; },
-    async saveProfile(data) {
+    async profile() {
+      if (!user) { profileId = null; return null; }
+      const profile = checked(await client.from(TABLES.profiles).select('id,cn,qq,updated_at').maybeSingle());
+      profileId = profile?.id || null;
+      return profile;
+    },
+    async loginProfile(data) {
       await this.ensureUser();
-      return checked(await client.from(TABLES.profiles).upsert({ id: user.id, cn: data.cn, qq: data.qq }).select('id,cn,qq,updated_at').single());
+      const result = checked(await client.rpc('club_login', { p_cn: data.cn, p_qq: data.qq }));
+      const profile = Array.isArray(result) ? result[0] : result;
+      profileId = profile?.id || null;
+      return profile;
     },
     async reviews() {
-      if (!user) return [];
-      return allRows(() => client.from(TABLES.reviews).select('*').eq('user_id', user.id).order('anime_id').order('phase'));
+      if (!profileId) return [];
+      return allRows(() => client.from(TABLES.reviews).select('*').eq('user_id', profileId).order('anime_id').order('phase'));
     },
     async animeReviews(animeId) {
       if (!user) await this.ensureUser();
       return checked(await client.rpc('club_anime_reviews', { p_anime: animeId }));
     },
     async saveReview(data) {
-      if (!user) throw new Error('请先填写资料。');
-      return checked(await client.from(TABLES.reviews).upsert({ user_id: user.id, anime_id: data.anime_id, phase: data.phase, score: data.score, comment: data.comment }, { onConflict: 'user_id,anime_id,phase' }).select().single());
+      if (!profileId) throw new Error('请先填写 CN 和 QQ。');
+      return checked(await client.from(TABLES.reviews).upsert({ user_id: profileId, anime_id: data.anime_id, phase: data.phase, score: data.score, comment: data.comment }, { onConflict: 'user_id,anime_id,phase' }).select().single());
     },
     async addAnime(title, seasonId) {
       if (scope !== 'admin' || !await this.isAdmin()) throw new Error('只有管理员可以新增番剧。');
       return checked(await client.from(TABLES.anime).insert({ id: crypto.randomUUID(), season_id: seasonId, title, is_approved: true, created_by: user.id }).select().single());
     },
-    async login(email, password) { user = checked(await client.auth.signInWithPassword({ email, password })).user; },
+    async login(email, password) { user = checked(await client.auth.signInWithPassword({ email, password })).user; profileId = null; },
     async isAdmin() { return Boolean(user && checked(await client.from(TABLES.admins).select('user_id').eq('user_id', user.id).maybeSingle())); },
     async adminData(seasonId) {
       const [season, anime, profiles] = await Promise.all([
@@ -106,6 +115,6 @@ export async function createCloudStore(config, scope = 'member') {
       return Array.isArray(data) ? data[0] : data;
     },
     async approve(id, approved = true) { return checked(await client.from(TABLES.anime).update({ is_approved: approved }).eq('id', id).select().single()); },
-    async logout() { checked(await client.auth.signOut()); user = null; },
+    async logout() { checked(await client.auth.signOut()); user = null; profileId = null; },
   };
 }

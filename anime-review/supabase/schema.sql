@@ -59,11 +59,13 @@ revoke all on function public.club_is_admin() from public;
 grant execute on function public.club_is_admin() to anon, authenticated;
 
 create table if not exists public.club_profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key,
   cn text not null check (cn = btrim(cn) and char_length(cn) between 1 and 40),
-  qq text check (qq ~ '^[1-9][0-9]{4,19}$'),
+  qq text not null check (qq ~ '^[1-9][0-9]{4,19}$'),
   updated_at timestamptz not null default now()
 );
+-- 旧版 profile.id 直接引用 auth.users；现在 id 是稳定的社团成员 id，浏览器会话单独映射。
+alter table public.club_profiles drop constraint if exists club_profiles_id_fkey;
 -- Upgrade existing profiles without treating their old contact number as a QQ ID.
 alter table public.club_profiles add column if not exists qq text check (qq ~ '^[1-9][0-9]{4,19}$');
 do $$
@@ -73,9 +75,97 @@ begin
   end if;
 end;
 $$;
--- Existing profiles may have no QQ yet; all new or updated profiles must supply one.
+alter table public.club_profiles alter column qq set not null;
 alter table public.club_profiles drop constraint if exists club_profiles_qq_required;
-alter table public.club_profiles add constraint club_profiles_qq_required check (qq is not null) not valid;
+
+-- 一个 QQ 只能对应一个成员；有重复时先报错，避免 db:init 静默合并数据。
+do $$
+begin
+  if exists (select 1 from public.club_profiles where qq is not null group by qq having count(*) > 1) then
+    raise exception 'club_profiles 存在重复 QQ，请先合并重复账号，再运行 db:init。';
+  end if;
+end;
+$$;
+create unique index if not exists club_profiles_unique_qq on public.club_profiles(qq);
+
+-- user_id 是当前浏览器的 auth 会话，profile_id 是稳定成员；同一成员可以映射多个浏览器。
+create table if not exists public.club_profile_sessions (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  profile_id uuid not null references public.club_profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists club_profile_sessions_profile on public.club_profile_sessions(profile_id);
+insert into public.club_profile_sessions (user_id, profile_id)
+select p.id, p.id from public.club_profiles p
+join auth.users u on u.id = p.id
+on conflict (user_id) do nothing;
+
+create or replace function public.club_current_profile()
+returns uuid language sql stable security definer set search_path = '' as $$
+  select profile_id from public.club_profile_sessions where user_id = (select auth.uid());
+$$;
+revoke all on function public.club_current_profile() from public;
+grant execute on function public.club_current_profile() to authenticated;
+
+-- CN + QQ 登录/登记：QQ 唯一，CN 必须匹配；新浏览器会映射到已有成员。
+create or replace function public.club_login(p_cn text, p_qq text)
+returns public.club_profiles
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_cn text := btrim(coalesce(p_cn, ''));
+  v_qq text := btrim(coalesce(p_qq, ''));
+  v_profile public.club_profiles;
+  v_current uuid;
+begin
+  if v_uid is null then
+    raise exception '登录状态已失效，请刷新页面后重试。' using errcode = '42501';
+  end if;
+  if v_cn = '' or char_length(v_cn) > 40 then
+    raise exception 'CN 请输入 1～40 个字。' using errcode = '22023';
+  end if;
+  if v_qq !~ '^[1-9][0-9]{4,19}$' then
+    raise exception 'QQ 号请填写 5～20 位数字，首位不能为 0。' using errcode = '22023';
+  end if;
+
+  select public.club_current_profile() into v_current;
+
+  select * into v_profile from public.club_profiles where qq = v_qq;
+  if found then
+    if v_current = v_profile.id then
+      update public.club_profiles set cn = v_cn where id = v_profile.id returning * into v_profile;
+      return v_profile;
+    end if;
+    if v_profile.cn <> v_cn then
+      raise exception 'CN 和 QQ 不匹配，请检查后重试，或联系管理员。' using errcode = '22023';
+    end if;
+    if v_current is not null then
+      raise exception '当前浏览器已绑定另一个账号，请清空本站数据后再登录。' using errcode = '22023';
+    end if;
+    insert into public.club_profile_sessions (user_id, profile_id) values (v_uid, v_profile.id);
+    return v_profile;
+  end if;
+
+  if v_current is not null then
+    update public.club_profiles set cn = v_cn, qq = v_qq where id = v_current returning * into v_profile;
+    return v_profile;
+  end if;
+
+  -- 兼容历史 profile.id = auth.uid 但没有映射记录的情况。
+  select * into v_profile from public.club_profiles where id = v_uid;
+  if found then
+    update public.club_profiles set cn = v_cn, qq = v_qq where id = v_uid returning * into v_profile;
+    insert into public.club_profile_sessions (user_id, profile_id) values (v_uid, v_profile.id);
+    return v_profile;
+  end if;
+
+  insert into public.club_profiles (id, cn, qq) values (v_uid, v_cn, v_qq) returning * into v_profile;
+  insert into public.club_profile_sessions (user_id, profile_id) values (v_uid, v_profile.id);
+  return v_profile;
+end;
+$$;
+revoke all on function public.club_login(text, text) from public, anon;
+grant execute on function public.club_login(text, text) to authenticated;
 
 create table if not exists public.club_anime (
   id text primary key,
@@ -128,7 +218,7 @@ grant execute on function public.club_anime_is_open(text) to authenticated;
 create or replace function public.club_anime_reviews(p_anime text)
 returns table (phase text, score numeric, comment text, updated_at timestamptz, cn text, is_mine boolean)
 language sql stable security definer set search_path = '' as $$
-  select r.phase, r.score, r.comment, r.updated_at, p.cn, r.user_id = (select auth.uid())
+  select r.phase, r.score, r.comment, r.updated_at, p.cn, r.user_id = (select public.club_current_profile())
   from public.club_reviews r
   join public.club_profiles p on p.id = r.user_id
   join public.club_anime a on a.id = r.anime_id
@@ -144,13 +234,14 @@ grant execute on function public.club_anime_reviews(text) to authenticated;
 
 alter table public.club_seasons enable row level security;
 alter table public.club_profiles enable row level security;
+alter table public.club_profile_sessions enable row level security;
 alter table public.club_anime enable row level security;
 alter table public.club_reviews enable row level security;
 
-revoke all on public.club_seasons, public.club_profiles, public.club_anime, public.club_reviews from anon, authenticated;
+revoke all on public.club_seasons, public.club_profiles, public.club_profile_sessions, public.club_anime, public.club_reviews from anon, authenticated;
 grant select on public.club_seasons, public.club_anime to anon, authenticated;
 grant update on public.club_seasons to authenticated;
-grant select, insert, update on public.club_profiles to authenticated;
+grant select on public.club_profiles to authenticated;
 grant insert, update, delete on public.club_anime to authenticated;
 grant select, insert, update, delete on public.club_reviews to authenticated;
 
@@ -162,12 +253,11 @@ drop policy if exists "season admin update" on public.club_seasons;
 create policy "season admin update" on public.club_seasons for update to authenticated
   using ((select public.club_is_admin())) with check ((select public.club_is_admin()));
 
+-- profile 只允许读取当前会话映射到的成员；写入统一走 club_login。
 drop policy if exists "profile read own or admin" on public.club_profiles;
-create policy "profile read own or admin" on public.club_profiles for select to authenticated using (id = (select auth.uid()) or (select public.club_is_admin()));
+create policy "profile read own or admin" on public.club_profiles for select to authenticated using (id = (select public.club_current_profile()) or (select public.club_is_admin()));
 drop policy if exists "profile insert own" on public.club_profiles;
-create policy "profile insert own" on public.club_profiles for insert to authenticated with check (id = (select auth.uid()));
 drop policy if exists "profile update own" on public.club_profiles;
-create policy "profile update own" on public.club_profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 drop policy if exists "anime read" on public.club_anime;
 create policy "anime read" on public.club_anime for select to anon, authenticated using (
@@ -188,14 +278,15 @@ create policy "anime admin update" on public.club_anime for update to authentica
 drop policy if exists "anime admin delete" on public.club_anime;
 create policy "anime admin delete" on public.club_anime for delete to authenticated using ((select public.club_is_admin()));
 
+-- 评价归属稳定成员 profile id；同一成员换浏览器后仍能读写自己的评价。
 drop policy if exists "reviews read own or admin" on public.club_reviews;
-create policy "reviews read own or admin" on public.club_reviews for select to authenticated using (user_id = (select auth.uid()) or (select public.club_is_admin()));
+create policy "reviews read own or admin" on public.club_reviews for select to authenticated using (user_id = (select public.club_current_profile()) or (select public.club_is_admin()));
 drop policy if exists "reviews insert own while open" on public.club_reviews;
-create policy "reviews insert own while open" on public.club_reviews for insert to authenticated with check (user_id = (select auth.uid()) and public.club_anime_is_open(anime_id));
+create policy "reviews insert own while open" on public.club_reviews for insert to authenticated with check (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id));
 drop policy if exists "reviews update own while open" on public.club_reviews;
-create policy "reviews update own while open" on public.club_reviews for update to authenticated using (user_id = (select auth.uid()) and public.club_anime_is_open(anime_id)) with check (user_id = (select auth.uid()) and public.club_anime_is_open(anime_id));
+create policy "reviews update own while open" on public.club_reviews for update to authenticated using (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id)) with check (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id));
 drop policy if exists "reviews delete own while open" on public.club_reviews;
-create policy "reviews delete own while open" on public.club_reviews for delete to authenticated using (user_id = (select auth.uid()) and public.club_anime_is_open(anime_id));
+create policy "reviews delete own while open" on public.club_reviews for delete to authenticated using (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id));
 
 -- 新建番季和切换当期由管理员调用，客户端不需要直接写 club_seasons。
 create or replace function public.club_create_season(p_year integer, p_month integer)
