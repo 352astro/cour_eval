@@ -128,6 +128,36 @@ npm run db:query -- "select id, title from public.club_anime order by sort_order
 
 `db:query` 以只读模式执行并打印 JSON 结果。
 
+### 全量备份
+
+在本机手动执行：
+
+```sh
+npm run db:backup
+```
+
+默认写入 `backups/<本地时间>/`，也可以用 `--out` 指定目录：
+
+```sh
+npm run db:backup -- --out ../anime-review-backups/2026-10-26
+```
+
+每次备份包含：
+
+- `schema.sql`：仓库中的结构定义
+- `data.json`：`public` schema 下所有基础表和全部行
+- `auth-users.json`：auth 用户的安全字段（id、email、创建/确认/登录时间）
+- `manifest.json`：表、行数、字段、数据库大小和版本
+- `README.txt`：恢复提示
+
+注意：
+
+- 备份包含 **CN、QQ、反馈内容、管理员邮箱**，属于敏感数据；目录权限是 `700`，文件是 `600`，不要提交或公开分享。
+- `backups/` 已加入 `.gitignore`；Nginx 配置也会拒绝 `/backups/`，本机预览服务不提供该目录。
+- 这是 `public` schema 的内容备份，不是可直接 `pg_restore` 的物理备份。恢复时先运行 `npm run db:init`，再按 `data.json` 导入；如果要连 `auth`/`storage` 一起做物理备份，需要使用数据库连接串和 Supabase CLI / `pg_dump`。
+- 密码、refresh token、access token 不会写入备份。社员换设备后可用 CN + QQ 重新登录；管理员账号需要重新创建或重置密码。
+- 建议至少每周运行一次，或在大规模改动前手动运行；最好在没人填写时执行，避免表之间出现短暂的不一致。
+
 ### 执行 SQL 文件
 
 ```sh
@@ -202,6 +232,7 @@ npm run db:sql -- supabase/schema.sql
 | `scripts/web.mjs` | Nginx 与临时公网隧道启动 |
 | `scripts/serve.mjs` | 本机静态预览 |
 | `scripts/database.mjs`、`scripts/initialize.mjs` | 命令行数据库操作、导入及初始化实现 |
+| `scripts/backup.mjs` | 本地手动全量备份脚本 |
 | `scripts/import.mjs` | 季度 CSV 解析、去重和导入 SQL 生成 |
 | `nginx/nginx.conf` | 网站托管配置 |
 | `supabase/` | 表结构和权限升级 |

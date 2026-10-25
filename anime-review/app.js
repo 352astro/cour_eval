@@ -97,6 +97,10 @@ function renderSeason() {
   $('#collection-status').textContent = !season ? '等待管理员开启' : open ? '评价征集中' : '征集已关闭 · 可以查看';
   $('#collection-status').classList.toggle('closed', !open);
 }
+function updateLoginNotice() {
+  $('#login-notice').hidden = state.view === 'admin' || !state.store || profileReady();
+  $('#login-notice-title').textContent = isOpen(state.season) ? '登录后才能评价和提交反馈' : '登录后才能提交反馈';
+}
 function updateProgress() {
   const done = state.anime.filter(a => hasContent(state.reviews.get(reviewKey(a.id, state.phase)))).length;
   $('#done-count').textContent = String(done).padStart(2, '0');
@@ -107,8 +111,7 @@ function updateProgress() {
   $('#phase-label').textContent = PHASES[state.phase];
   document.querySelectorAll('[data-phase]').forEach(button => { button.classList.toggle('active', button.dataset.phase === state.phase); button.setAttribute('aria-pressed', String(button.dataset.phase === state.phase)); });
   $('#identity-button').innerHTML = state.profile ? `${esc(state.profile.cn)}${profileReady() ? '' : ' · 补充资料'} <span aria-hidden="true">↗</span>` : '登录 / 资料 <span aria-hidden="true">↗</span>';
-  $('#login-notice').hidden = !state.store || profileReady();
-  $('#login-notice-title').textContent = isOpen(state.season) ? '登录后才能评价和提交反馈' : '登录后才能提交反馈';
+  updateLoginNotice();
   let status = !state.store ? '尚未连接云端' : !state.season ? '等待管理员开启番季' : !profileReady() ? '填写 CN 和 QQ 号后即可保存' : state.dirty.size ? `有 ${state.dirty.size} 条尚未保存` : '所有更改已保存到云端';
   if (state.saving.size) status = '正在保存…';
   if (state.errors.size) status = '保存未完成 · 请重试';
@@ -281,6 +284,7 @@ async function exportMine() {
 function switchView(view) {
   state.view = view; $('#member-view').hidden = view !== 'member'; $('#admin-view').hidden = view !== 'admin';
   $('#admin-workspace').hidden = !state.admin || view === 'admin';
+  updateLoginNotice();
   if (view === 'admin') $('#admin-view').scrollIntoView({ block:'start', behavior:'smooth' });
 }
 function renderAdminSeasons() {

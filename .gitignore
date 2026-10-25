@@ -15,3 +15,6 @@ __pycache__/
 anime-review/.runtime/
 anime-review/_site/
 anime-review/node_modules/
+
+# 本地数据库备份（含 CN/QQ/反馈，禁止提交）
+anime-review/backups/
