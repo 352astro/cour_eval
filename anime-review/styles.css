@@ -79,3 +79,37 @@
   .skeleton-icon{width:46px;height:64px;border-radius:8px}
   .community-review{padding:10px 11px}
 }
+
+/* 固定在右下角的 Bug / 建议入口。 */
+.feedback-fab{position:fixed;right:20px;bottom:20px;z-index:90;display:flex;align-items:center;gap:8px;border:0;border-radius:999px;background:var(--ink);color:#fff;padding:11px 16px;font-size:12px;font-weight:600;box-shadow:0 8px 24px #2529272e;cursor:pointer}
+.feedback-fab:hover{background:#434943}
+.feedback-fab-mark{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:800}
+.dialog-content select,.dialog-content textarea{width:100%;border:1px solid #dce0d3;border-radius:7px;background:#fff;padding:11px 12px;margin-top:7px;font-size:12px;color:var(--ink)}
+.dialog-content textarea{resize:vertical;line-height:1.8}
+
+/* 管理员的反馈列表。 */
+.admin-feedback{max-height:520px;overflow:auto}
+.feedback-item{border-top:1px solid var(--line);padding:14px 0}
+.feedback-item:first-child{border-top:0}
+.feedback-item.resolved{opacity:.62}
+.feedback-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10px;color:#9aa28f;margin-bottom:6px}
+.feedback-kind{font-size:9px;padding:1px 6px;border-radius:3px;background:#eef2e8;color:#667859}
+.feedback-kind.bug{background:#fcf0e9;color:#b06f55}
+.feedback-kind.idea{background:#eef2e8;color:#667859}
+.feedback-kind.other{background:#eef1f4;color:#7f8c9a}
+.feedback-status{font-size:9px;color:#a1a894}
+.feedback-item p{font-size:12px;line-height:1.9;color:#6f7866;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 5px}
+.feedback-item small{display:block;font-size:9px;color:#b0b5a6;overflow-wrap:anywhere;margin-bottom:5px}
+.feedback-item .text-button{font-size:10px}
+@media(max-width:760px){.feedback-fab{right:14px;bottom:calc(14px + env(safe-area-inset-bottom));padding:10px 14px;font-size:11px}.feedback-fab-mark{width:16px;height:16px;font-size:10px}.feedback-item{padding:12px 0}}
+@media print{.feedback-fab{display:none}}
+
+/* 未登录时的全局提示和展开区提示。 */
+.login-notice{background:var(--accent-soft);border-color:#f0d9cd;color:#9b6a55}
+.login-notice strong{color:#9b5a42}
+.login-notice p{color:#a97863}
+.login-notice .button{margin-left:auto;white-space:nowrap;background:var(--accent);color:#fff}
+.login-notice .button:hover{background:#d85a37}
+.editor-login{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--accent-soft);border:1px solid #f0d9cd;border-radius:8px;padding:10px 12px;margin:14px 0 0;font-size:11px;color:#9b6a55}
+.editor-login .text-button{color:var(--accent);font-size:11px;white-space:nowrap}
+@media(max-width:760px){.login-notice .button{margin-left:0}.editor-login{padding:9px 10px}}

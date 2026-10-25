@@ -100,6 +100,22 @@ select p.id, p.id from public.club_profiles p
 join auth.users u on u.id = p.id
 on conflict (user_id) do nothing;
 
+-- 社员/访客提交的 Bug 和建议；只允许管理员读取和处理。
+create table if not exists public.club_feedback (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  kind text not null default 'bug' check (kind in ('bug', 'idea', 'other')),
+  content text not null check (char_length(content) between 1 and 2000),
+  page text check (char_length(page) <= 1000),
+  user_agent text check (char_length(user_agent) <= 1000),
+  profile_id uuid references public.club_profiles(id) on delete set null,
+  auth_user_id uuid references auth.users(id) on delete set null,
+  status text not null default 'open' check (status in ('open', 'resolved')),
+  resolved_at timestamptz
+);
+create index if not exists club_feedback_created_at on public.club_feedback(created_at desc);
+create index if not exists club_feedback_status on public.club_feedback(status, created_at desc);
+
 create or replace function public.club_current_profile()
 returns uuid language sql stable security definer set search_path = '' as $$
   select profile_id from public.club_profile_sessions where user_id = (select auth.uid());
@@ -120,6 +136,9 @@ declare
 begin
   if v_uid is null then
     raise exception '登录状态已失效，请刷新页面后重试。' using errcode = '42501';
+  end if;
+  if not exists (select 1 from auth.users where id = v_uid) then
+    raise exception '登录状态已失效，请刷新页面或清空本站数据后重新登录。' using errcode = '23503';
   end if;
   if v_cn = '' or char_length(v_cn) > 40 then
     raise exception 'CN 请输入 1～40 个字。' using errcode = '22023';
@@ -166,6 +185,46 @@ end;
 $$;
 revoke all on function public.club_login(text, text) from public, anon;
 grant execute on function public.club_login(text, text) to authenticated;
+
+-- 提交 Bug/建议；写入走 security definer 函数，避免直接开放表。
+create or replace function public.club_submit_feedback(
+  p_kind text,
+  p_content text,
+  p_page text default null,
+  p_user_agent text default null
+)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_profile uuid := (select public.club_current_profile());
+  v_content text := btrim(coalesce(p_content, ''));
+  v_recent integer;
+begin
+  if v_uid is null then
+    raise exception '登录状态已失效，请刷新页面后重试。' using errcode = '42501';
+  end if;
+  if v_profile is null then
+    raise exception '请先登录后再提交反馈。' using errcode = '42501';
+  end if;
+  if p_kind is null or p_kind not in ('bug', 'idea', 'other') then
+    raise exception '反馈类型不正确。' using errcode = '22023';
+  end if;
+  if v_content = '' or char_length(v_content) > 2000 then
+    raise exception '反馈内容请填写 1～2000 个字。' using errcode = '22023';
+  end if;
+  select count(*) into v_recent
+  from public.club_feedback
+  where created_at > now() - interval '1 hour'
+    and (auth_user_id = v_uid or (v_profile is not null and profile_id = v_profile));
+  if v_recent >= 10 then
+    raise exception '提交太频繁，请稍后再试。' using errcode = '22023';
+  end if;
+  insert into public.club_feedback (kind, content, page, user_agent, profile_id, auth_user_id)
+  values (p_kind, v_content, left(p_page, 1000), left(p_user_agent, 1000), v_profile, v_uid);
+end;
+$$;
+revoke all on function public.club_submit_feedback(text, text, text, text) from public, anon;
+grant execute on function public.club_submit_feedback(text, text, text, text) to authenticated;
 
 create table if not exists public.club_anime (
   id text primary key,
@@ -229,19 +288,21 @@ language sql stable security definer set search_path = '' as $$
     and (r.score is not null or btrim(r.comment) <> '')
   order by r.phase, p.cn;
 $$;
-revoke all on function public.club_anime_reviews(text) from public, anon;
-grant execute on function public.club_anime_reviews(text) to authenticated;
+revoke all on function public.club_anime_reviews(text) from public;
+grant execute on function public.club_anime_reviews(text) to anon, authenticated;
 
 alter table public.club_seasons enable row level security;
 alter table public.club_profiles enable row level security;
 alter table public.club_profile_sessions enable row level security;
+alter table public.club_feedback enable row level security;
 alter table public.club_anime enable row level security;
 alter table public.club_reviews enable row level security;
 
-revoke all on public.club_seasons, public.club_profiles, public.club_profile_sessions, public.club_anime, public.club_reviews from anon, authenticated;
+revoke all on public.club_seasons, public.club_profiles, public.club_profile_sessions, public.club_anime, public.club_reviews, public.club_feedback from anon, authenticated;
 grant select on public.club_seasons, public.club_anime to anon, authenticated;
 grant update on public.club_seasons to authenticated;
 grant select on public.club_profiles to authenticated;
+grant select, update on public.club_feedback to authenticated;
 grant insert, update, delete on public.club_anime to authenticated;
 grant select, insert, update, delete on public.club_reviews to authenticated;
 
@@ -287,6 +348,11 @@ drop policy if exists "reviews update own while open" on public.club_reviews;
 create policy "reviews update own while open" on public.club_reviews for update to authenticated using (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id)) with check (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id));
 drop policy if exists "reviews delete own while open" on public.club_reviews;
 create policy "reviews delete own while open" on public.club_reviews for delete to authenticated using (user_id = (select public.club_current_profile()) and public.club_anime_is_open(anime_id));
+
+drop policy if exists "feedback admin read" on public.club_feedback;
+create policy "feedback admin read" on public.club_feedback for select to authenticated using ((select public.club_is_admin()));
+drop policy if exists "feedback admin update" on public.club_feedback;
+create policy "feedback admin update" on public.club_feedback for update to authenticated using ((select public.club_is_admin())) with check ((select public.club_is_admin()));
 
 -- 新建番季和切换当期由管理员调用，客户端不需要直接写 club_seasons。
 create or replace function public.club_create_season(p_year integer, p_month integer)

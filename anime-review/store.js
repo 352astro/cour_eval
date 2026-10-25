@@ -1,4 +1,4 @@
-export const TABLES = { seasons: 'club_seasons', anime: 'club_anime', profiles: 'club_profiles', reviews: 'club_reviews', admins: 'club_admins' };
+export const TABLES = { seasons: 'club_seasons', anime: 'club_anime', profiles: 'club_profiles', reviews: 'club_reviews', admins: 'club_admins', feedback: 'club_feedback' };
 function checked(result) { if (result.error) throw result.error; return result.data; }
 async function allRows(query) {
   let output = [];
@@ -66,7 +66,19 @@ export async function createCloudStore(config, scope = 'member') {
     },
     async loginProfile(data) {
       await this.ensureUser();
-      const result = checked(await client.rpc('club_login', { p_cn: data.cn, p_qq: data.qq }));
+      const attempt = () => client.rpc('club_login', { p_cn: data.cn, p_qq: data.qq });
+      let result;
+      try {
+        result = checked(await attempt());
+      } catch (error) {
+        if (error?.code !== '23503') throw error;
+        // 匿名会话已被删除（例如管理员清理账号后旧浏览器仍留着 token）。
+        // 丢掉旧会话，新建匿名身份后重试一次。
+        try { await client.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
+        user = null; profileId = null;
+        await this.ensureUser();
+        result = checked(await attempt());
+      }
       const profile = Array.isArray(result) ? result[0] : result;
       profileId = profile?.id || null;
       return profile;
@@ -76,8 +88,16 @@ export async function createCloudStore(config, scope = 'member') {
       return allRows(() => client.from(TABLES.reviews).select('*').eq('user_id', profileId).order('anime_id').order('phase'));
     },
     async animeReviews(animeId) {
-      if (!user) await this.ensureUser();
       return checked(await client.rpc('club_anime_reviews', { p_anime: animeId }));
+    },
+    async submitFeedback(data) {
+      if (!profileId) throw new Error('请先登录后再提交反馈。');
+      return checked(await client.rpc('club_submit_feedback', {
+        p_kind: data.kind,
+        p_content: data.content,
+        p_page: `${location.origin}${location.pathname}`,
+        p_user_agent: navigator.userAgent,
+      }));
     },
     async saveReview(data) {
       if (!profileId) throw new Error('请先填写 CN 和 QQ。');
@@ -90,16 +110,17 @@ export async function createCloudStore(config, scope = 'member') {
     async login(email, password) { user = checked(await client.auth.signInWithPassword({ email, password })).user; profileId = null; },
     async isAdmin() { return Boolean(user && checked(await client.from(TABLES.admins).select('user_id').eq('user_id', user.id).maybeSingle())); },
     async adminData(seasonId) {
-      const [season, anime, profiles] = await Promise.all([
+      const [season, anime, profiles, feedback] = await Promise.all([
         client.from(TABLES.seasons).select('*').eq('id', seasonId).single(),
         animeOfSeason(seasonId),
         allRows(() => client.from(TABLES.profiles).select('id,cn,qq,updated_at').order('id')),
+        allRows(() => client.from(TABLES.feedback).select('*').order('created_at', { ascending: false })),
       ]);
       const ids = anime.map(a => a.id);
       const reviews = ids.length
         ? await allRows(() => client.from(TABLES.reviews).select('*').in('anime_id', ids).order('user_id').order('anime_id').order('phase'))
         : [];
-      return { season: checked(season), anime, reviews, profiles };
+      return { season: checked(season), anime, reviews, profiles, feedback };
     },
     async updateSeason(seasonId, patch) {
       return checked(await client.from(TABLES.seasons).update(patch).eq('id', seasonId).select().single());
@@ -115,6 +136,12 @@ export async function createCloudStore(config, scope = 'member') {
       return Array.isArray(data) ? data[0] : data;
     },
     async approve(id, approved = true) { return checked(await client.from(TABLES.anime).update({ is_approved: approved }).eq('id', id).select().single()); },
+    async resolveFeedback(id, resolved) {
+      return checked(await client.from(TABLES.feedback).update({
+        status: resolved ? 'resolved' : 'open',
+        resolved_at: resolved ? new Date().toISOString() : null,
+      }).eq('id', id).select().single());
+    },
     async logout() { checked(await client.auth.signOut()); user = null; profileId = null; },
   };
 }
