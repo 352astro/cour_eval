@@ -10,7 +10,8 @@ export function hasContent(review) {
 }
 export function validateScore(value) {
   if (value === '' || value === null || value === undefined) return null;
-  const score = Number(value);
+  const text = String(value).trim().replace(/[,，。．]/g, '.');
+  const score = Number(text);
   if (!Number.isFinite(score) || score < 0 || score > 5 || Math.abs(score * 10 - Math.round(score * 10)) > 1e-8) {
     throw new Error('评分请填写 0～5 之间的数字，最多一位小数。');
   }

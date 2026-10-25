@@ -26,7 +26,12 @@ function message(error) {
   if (['42703','PGRST204'].includes(error?.code) && /(year|month|is_current|cover_url)/i.test(error.message || '')) return '云端番季结构需要升级，请管理员运行 db:init。';
   if (error?.code === '42501') return '数据库未允许此操作。征集可能已关闭、账号无权操作，或云端结构需要升级，请刷新并重试。';
   if (/anonymous.*disabled/i.test(error?.message || '')) return '无密码身份尚未启用，请联系管理员完成配置。';
+  if (/invalid login credentials|invalid_credentials/i.test(error?.message || '')) return '邮箱或密码不正确。';
+  if (/email not confirmed|email_not_confirmed/i.test(error?.message || '')) return '邮箱尚未确认，请先在 Supabase 确认账号。';
   if (/Failed to fetch|NetworkError|Load failed|timeout|timed out|aborted/i.test(error?.message || '')) return '网络连接暂时不可用，请检查网络后重试。';
+  if (error?.code === '22023') return error.message || '输入不合法，请检查后重试。';
+  // 带 code/details 的数据库错误只写日志，不把表名、约束名等实现细节发到前端。
+  if (error?.code || error?.details || error?.hint || error?.status) return '操作未完成，请稍后重试。';
   return error?.message || '操作未完成，请稍后重试。';
 }
 function draftKey() { return `anime-club-draft:${state.store?.mode}:${config.supabaseUrl || 'local'}:${state.season?.id || 'no-season'}:${state.profile?.id || 'visitor'}`; }
@@ -181,7 +186,7 @@ function renderList() {
     const disabled = !profileReady() || !state.store || !isOpen(state.season);
     return `<details class="anime-card" data-id="${esc(a.id)}" ${expanded.has(a.id) ? 'open' : ''}>
       <summary class="anime-summary"><span class="anime-number">${String(index).padStart(2,'0')}</span><span class="anime-cover" aria-hidden="true">${a.cover_url ? `<img src="${esc(a.cover_url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}<span class="anime-fallback">${['✳','◇','✦','◈'][index % 4]}</span></span><span class="anime-title-wrap"><span class="anime-title">${esc(a.title)}</span><span class="anime-subtitle">${esc(state.season ? `${seasonStamp(state.season)} · ANIME` : 'ANIME')}${a.is_approved ? '' : ' · 管理员暂未公开'}</span></span><span class="review-status ${done ? 'done' : ''}">${done ? row.score === null ? '已写吐槽' : `${row.score} 分` : '未填写'}</span><span class="chevron" aria-hidden="true">›</span></summary>
-      <div class="review-editor"><div class="editor-top"><label class="score-label" for="score-${esc(a.id)}">我的评分</label><div class="score-input-wrap"><input id="score-${esc(a.id)}" class="score-input" data-field="score" type="number" min="0" max="5" step="0.1" inputmode="decimal" placeholder="—" value="${esc(row.invalidScore ?? row.score ?? '')}" ${disabled ? 'disabled' : ''}><span class="score-denominator">/ 5</span></div><div class="quick-scores" aria-label="快速评分">${[1,2,3,4,5].map(n => `<button type="button" data-score="${n}" ${disabled ? 'disabled' : ''}>${n}分</button>`).join('')}</div></div>
+      <div class="review-editor"><div class="editor-top"><label class="score-label" for="score-${esc(a.id)}">我的评分</label><div class="score-input-wrap"><input id="score-${esc(a.id)}" class="score-input" data-field="score" type="number" min="0" max="5" step="0.1" inputmode="decimal" placeholder="4.5" title="支持一位小数，例如 4.5" aria-label="我的评分，支持一位小数，例如 4.5" value="${esc(row.invalidScore ?? row.score ?? '')}" ${disabled ? 'disabled' : ''}><span class="score-denominator">/ 5</span></div><div class="quick-scores" aria-label="快速评分">${[1,2,3,4,5].map(n => `<button type="button" data-score="${n}" ${disabled ? 'disabled' : ''}>${n}分</button>`).join('')}</div></div>
       <label class="comment-label" for="comment-${esc(a.id)}">${PHASES[state.phase]}<textarea id="comment-${esc(a.id)}" data-field="comment" maxlength="20000" rows="4" placeholder="剧情、角色、作画，或是某个让你记住的瞬间……想说什么都可以。" ${disabled ? 'disabled' : ''}>${esc(row.comment)}</textarea></label>
       <div class="editor-footer"><span class="save-state" data-save-state>${disabled ? !profileReady() ? '先填写 CN 和 QQ 号，就可以开始记录了' : '征集已关闭，记录仍可查看' : '填写后自动保存'}</span><div class="editor-actions">${!profileReady() ? '<button class="text-button" data-login>填写资料 ↗</button>' : '<button class="text-button" data-clear>清空这条</button><button class="text-button" data-save>保存 / 重试 ↗</button>'}</div></div><div class="community" data-community>${communityHTML(a.id)}</div></div></details>`;
   }).join('');
